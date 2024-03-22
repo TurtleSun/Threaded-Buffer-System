@@ -33,14 +33,12 @@ int main (int argc, char ** argv) {
         }
     } else {
         while(1) {
-            printf("new while loop iteration\n");
             char * fileInput = fgets(cmds, 1024, stdin);
-            if (fileInput == NULL) { // No more commands in the file
+            if (fileInput == NULL || feof(stdin)) { // No more commands in the file
                 break;
             }
             printf("Got file input: %s", cmds);
             processCommands(cmds);
-            printf("wtf1\n");
         }
     }
 
@@ -48,24 +46,19 @@ int main (int argc, char ** argv) {
 }
 
 void processCommands(char * cmds) {
-    printf("wtf2\n");
     int forkRet = fork();
-    printf("expecto1\n");
     if (forkRet == -1) {
-        fprintf(stderr, "fork failed\n");
         exit(1);
     } else if (forkRet == 0) {
         printf("I AM CHILD - %d\n", forkRet);
         exit(0);
     } else {
         printf("I AM PARENT - %d\n", forkRet);    
-        waitpid(forkRet, NULL, 0);
-        printf("wait is done\n");    
+        waitpid(forkRet, NULL, 0); 
     }
-    printf("wtf3\n");
     return;
 }
 
 //void handleInterrupt() { // Used to respond to SIGINT / Ctrl-c
-//    printf("get fucked");
+//    printf("handleInterrupt successful");
 //}
