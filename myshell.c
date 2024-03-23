@@ -13,6 +13,7 @@ int numPids;
 int *pids;
 
 char *receivedInput;
+char * prevInput; // used for detecting EOF.
 
 void processInput(char *);
 void executeCommands(char **);
@@ -25,11 +26,12 @@ int main(int argc, char **argv)
 
     // Initialize memory, assuming one element for now.
     receivedInput = malloc(1024); // Unknown input size, so assume fixed buffer size.
+    prevInput = malloc(1024);
     inputtedCmds = malloc(sizeof(char *));
     pids = malloc(sizeof(int));
 
     // Check if malloc was successful.
-    if (pids == NULL || receivedInput == NULL || inputtedCmds == NULL)
+    if (pids == NULL || receivedInput == NULL || prevInput == NULL || inputtedCmds == NULL)
     {
         fprintf(stderr, "malloc error.\n");
         exit(1);
@@ -45,8 +47,13 @@ int main(int argc, char **argv)
 
         // Get input from stdin, check if we have reached the end of stdin.
         fgets(receivedInput, 1024, stdin);
-        if (feof(stdin))
+        if (feof(stdin) && (strcmp(receivedInput, prevInput) == 0 || isTerminal)) // Terminal entered Ctrl-D or EOF on empty line in file.
+            return 0;
+        else if (feof(stdin)) // EOF on the same line as new input in a file, do one more iteration.
             continueProcessing = 0;
+
+        // Copy input for next iteration to check for EOF.
+        strcpy(prevInput, receivedInput);
 
         // Begin processing.
         printf("GOT INPUT: %s\n", receivedInput);
