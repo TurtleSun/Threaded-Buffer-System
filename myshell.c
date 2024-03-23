@@ -15,6 +15,7 @@ int *pids;
 char *receivedInput;
 
 void processInput(char *);
+void executeCommands(char **);
 char **splitBySpace(char *);
 
 int main(int argc, char **argv)
@@ -100,25 +101,7 @@ void processInput(char *str)
     {
         // Extract the command and arguments by means of checking the spaces.
         char **tokens = splitBySpace(inputtedCmds[i]);
-
-        // Fork and execute the command.
-        int forkRet = fork();
-        if (forkRet == -1) // Fork failed
-        {
-            fprintf(stderr, "fork error.\n");
-            exit(1);
-        }
-        else if (forkRet == 0) // Child process - do the command.
-        {
-            printf("I AM CHILD - %d\n", forkRet); // Child proc
-            execvp(tokens[0], tokens);
-            exit(0);
-        }
-        else // Parent process - just wait for the child.
-        {
-            printf("I AM PARENT - %d\n", forkRet);
-            waitpid(forkRet, NULL, 0);
-        }
+        executeCommands(tokens);
     }
 }
 
@@ -162,4 +145,26 @@ char **splitBySpace(char *str)
     }
 
     return tokens;
+}
+
+// Executes the commands in the tokens array.
+void executeCommands(char ** tokens) {
+    // Fork and execute the command.
+    int forkRet = fork();
+    if (forkRet == -1) // Fork failed
+    {
+        fprintf(stderr, "fork error.\n");
+        exit(1);
+    }
+    else if (forkRet == 0) // Child process - do the command.
+    {
+        printf("I AM CHILD - %d\n", forkRet); // Child proc
+        execvp(tokens[0], tokens);
+        exit(0);
+    }
+    else // Parent process - just wait for the child.
+    {
+        printf("I AM PARENT - %d\n", forkRet);
+        waitpid(forkRet, NULL, 0);
+    }
 }
