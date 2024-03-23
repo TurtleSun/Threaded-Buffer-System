@@ -35,7 +35,8 @@ int main(int argc, char **argv)
     }
 
     // Create a loop to get input from stdin and process it.
-    while (1)
+    int continueProcessing = 1;
+    while (continueProcessing)
     {
         // If stdin is a terminal, create a prompt for user input.
         if (isTerminal)
@@ -44,7 +45,7 @@ int main(int argc, char **argv)
         // Get input from stdin, check if we have reached the end of stdin.
         fgets(receivedInput, 1024, stdin);
         if (feof(stdin))
-            break;
+            continueProcessing = 0;
 
         // Begin processing.
         printf("GOT INPUT: %s\n", receivedInput);
@@ -55,22 +56,30 @@ int main(int argc, char **argv)
 
 void processInput(char *str)
 {
+    char * strCopy = malloc(strlen(str) + 1);
+    if (strCopy == NULL)
+    {
+        fprintf(stderr, "malloc error.\n");
+        exit(1);
+    }
+    strcpy(strCopy, str);
+
     // Remove trailiing newline from input
-    if (str[strlen(str) - 1] == '\n')
-        str[strlen(str) - 1] = '\0';
+    if (strCopy[strlen(strCopy) - 1] == '\n')
+        strCopy[strlen(strCopy) - 1] = '\0';
 
     numCmds = 0;
     while (1)
     {
          // Check if there are no more commands
-        if (strcmp(str, "") == 0)
+        if (strcmp(strCopy, "") == 0)
             break;
 
         // Split input into commands based on semicolons.
-        strtok(str, ";");
+        strtok(strCopy, ";");
 
         // Allocating memory for the command.
-        inputtedCmds[numCmds] = malloc(strlen(str) + 1);
+        inputtedCmds[numCmds] = malloc(strlen(strCopy) + 1);
         inputtedCmds = realloc(inputtedCmds, sizeof(char *) * (numCmds + 1));
         if (inputtedCmds == NULL || inputtedCmds[numCmds] == NULL)
         {
@@ -79,11 +88,11 @@ void processInput(char *str)
         }
 
         // Copy command into inputtedCmds
-        strcpy(inputtedCmds[numCmds], str);
+        strcpy(inputtedCmds[numCmds], strCopy);
 
         // Increment numCmds and move to next command
         numCmds++;
-        str = str + strlen(str) + 1;
+        strCopy = strCopy + strlen(strCopy) + 1;
     }
 
     // Iterate through each set of commands identified.
