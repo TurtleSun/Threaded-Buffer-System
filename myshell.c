@@ -15,7 +15,6 @@ int *pids;
 char *receivedInput;
 
 void processInput(char *);
-void removeSpaces(char *);
 char **splitBySpace(char *);
 
 int main(int argc, char **argv)
@@ -63,11 +62,14 @@ void processInput(char *str)
     numCmds = 0;
     while (1)
     {
-        // Split input into commands based on semicolons.
-        strtok(str, ";");
-        if (strcmp(str, "") == 0) // Check if there are no more commands
+         // Check if there are no more commands
+        if (strcmp(str, "") == 0)
             break;
 
+        // Split input into commands based on semicolons.
+        strtok(str, ";");
+
+        // Allocating memory for the command.
         inputtedCmds[numCmds] = malloc(strlen(str) + 1);
         inputtedCmds = realloc(inputtedCmds, sizeof(char *) * (numCmds + 1));
         if (inputtedCmds == NULL || inputtedCmds[numCmds] == NULL)
@@ -97,13 +99,13 @@ void processInput(char *str)
             fprintf(stderr, "fork error.\n");
             exit(1);
         }
-        else if (forkRet == 0) // Child process
+        else if (forkRet == 0) // Child process - do the command.
         {
             printf("I AM CHILD - %d\n", forkRet); // Child proc
             execvp(tokens[0], tokens);
             exit(0);
         }
-        else // Parent process
+        else // Parent process - just wait for the child.
         {
             printf("I AM PARENT - %d\n", forkRet);
             waitpid(forkRet, NULL, 0);
@@ -116,71 +118,39 @@ char **splitBySpace(char *str)
 {
     // Initializing memory, assuming one element for now in tokens.
     char **tokens = malloc(sizeof(char *));
-    char *buffer = malloc(strlen(str) + 1);
-    if (tokens == NULL || buffer == NULL)
+    if (tokens == NULL)
     {
         fprintf(stderr, "malloc error.\n");
         exit(1);
     }
 
     int numTokens = 0;
-    int bufferIdx = 0;
-    int numChars = strlen(str);
-    for (int i = 0; i < numChars; i++)
-    {
-        if (str[i] == ' ')
+    while (1) {
+        // Check if there are no more commands
+        if (strcmp(str, "") == 0)
+            break;
+
+        // Split input into commands based on spaces.
+        str = strtok(str, " ");
+
+        // Check if the remaining string is empty. (Space gets replaced with null char in strtok)
+        if (str == NULL)
+            break;
+
+        // Allocating memory    
+        tokens[numTokens] = malloc(strlen(str) + 1);
+        tokens = realloc(tokens, sizeof(char *) * (numTokens + 1));
+        if (tokens == NULL || tokens[numTokens] == NULL)
         {
-            buffer[bufferIdx] = '\0';
-
-            // (Re-)allocating memory for the new token.
-            tokens[numTokens] = malloc(strlen(buffer) + 1);
-            tokens = realloc(tokens, sizeof(char *) * (numTokens + 1));
-            if (tokens == NULL || tokens[numTokens] == NULL)
-            {
-                fprintf(stderr, "malloc error.\n");
-                exit(1);
-            }
-
-            // Copy the buffer into the tokens array.
-            strcpy(tokens[numTokens], buffer);
-
-            // Increment numTokens and reset the buffer.
-            numTokens++;
-            for (int j = 0; j < bufferIdx; j++)
-                buffer[j] = '\0';
-            bufferIdx = 0;
+            fprintf(stderr, "malloc error.\n");
+            exit(1);
         }
-        else
-        {
-            // Copy the character into the buffer.
-            buffer[bufferIdx] = str[i];
-            bufferIdx++;
-        }
+
+        // Copy the current string into the tokens array.
+        strcpy(tokens[numTokens], str);
+        numTokens++;
+        str = str + strlen(str) + 1;
     }
 
-    // Copy the last token into the tokens array.
-    tokens[numTokens] = malloc(strlen(buffer) + 1);
-    if (tokens[numTokens] == NULL)
-    {
-        fprintf(stderr, "malloc error.\n");
-        exit(1);
-    }
-    strcpy(tokens[numTokens], buffer);
     return tokens;
 }
-
-/*void removeSpaces(char *str)
-{
-    int numChars = strlen(str);
-    for (int i = 0; i < numChars; i++)
-    {
-        if (str[i] == ' ')
-        {
-            for (int j = i; j < numChars; j++)
-            {
-                str[j] = str[j + 1];
-            }
-            numChars--;
-        }
-    }
-}*/
