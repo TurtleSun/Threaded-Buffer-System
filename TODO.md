@@ -1,7 +1,10 @@
 ## Myshell
+- Tidy up possible edge cases
+  - `ls -la >` yields an open error, need to identify missing redirection operand.
+  - need to check if we maxed out our file descriptors
 - Enable piping in myshell
-  - `ls | cat`
-  - `ls -la | cat`
+  - `ls | wc`
+  - `ls -la | wc`
   - `ls | cat | grep .c`
 - Enable background tasks
   - `sleep 10 &`

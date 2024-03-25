@@ -42,7 +42,7 @@ int savedStderr;
 void processInput(char *);
 void executeCommands(char **);
 char **splitBySpace(char *);
-void setRedirections(char **);
+int setRedirections(char **);
 void resetRedirections(void);
 int openFile(char *, int);
 void linkFileDescriptors(int, int);
@@ -90,7 +90,7 @@ int main(int argc, char **argv)
         // Get input from stdin, check if we have reached the end of stdin.
         fgets(receivedInput, 1024, stdin);
         if (feof(stdin) && (strcmp(receivedInput, prevInput) == 0 || isTerminal)) // Terminal entered Ctrl-D or EOF on empty line in file.
-            return 0;
+            break;
         else if (feof(stdin)) // EOF on the same line as new input in a file, do one more iteration.
             continueProcessing = 0;
 
@@ -100,6 +100,7 @@ int main(int argc, char **argv)
         // Begin processing.
         processInput(receivedInput);
     }
+    printf("\n");
     return 0;
 }
 
@@ -201,7 +202,11 @@ char **splitBySpace(char *str)
 // Executes the commands in the tokens array.
 void executeCommands(char **tokens)
 {
-    setRedirections(tokens);
+    int setRedReturn = setRedirections(tokens);
+    if (setRedReturn == -1) {
+        perror("Bad Input for Redirection");
+        return;
+    }
 
     // Fork and execute the command.
     int forkRet = fork();
@@ -224,7 +229,7 @@ void executeCommands(char **tokens)
 }
 
 // Iterates over the list of tokens for a command and sets any needed redirections, in and out.
-void setRedirections(char **tokens)
+int setRedirections(char **tokens)
 {
     int isRedirecting = 0;
     int newfd = -2;
@@ -237,9 +242,11 @@ void setRedirections(char **tokens)
         if (strcmp(tokens[i], "&>") == 0)
         {
             int fileFD = isFileOpened(tokens[i+1]);
-            if (fileFD == -1)
+            if (fileFD == -1) {
                 newfd = openFile(tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
-            else
+                if (newfd == -1)
+                    return -1;
+            } else
                 newfd = fileFD;
 
             linkFileDescriptors(1, newfd);
@@ -251,9 +258,11 @@ void setRedirections(char **tokens)
         if (strcmp(tokens[i], ">") == 0 || strcmp(tokens[i], "1>") == 0)
         {
             int fileFD = isFileOpened(tokens[i+1]);
-            if (fileFD == -1)
+            if (fileFD == -1) {
                 newfd = openFile(tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
-            else
+                if (newfd == -1)
+                    return -1;
+            } else
                 newfd = fileFD;
 
             linkFileDescriptors(1, newfd);
@@ -264,9 +273,11 @@ void setRedirections(char **tokens)
         if (strcmp(tokens[i], "2>") == 0)
         {
             int fileFD = isFileOpened(tokens[i+1]);
-            if (fileFD == -1)
+            if (fileFD == -1) {
                 newfd = openFile(tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
-            else
+                if (newfd == -1)
+                    return -1;
+            } else
                 newfd = fileFD;
 
             linkFileDescriptors(2, newfd);
@@ -278,9 +289,11 @@ void setRedirections(char **tokens)
         {
             int fileFD = isFileOpened(tokens[i+1]);
 
-            if (fileFD == -1)
+            if (fileFD == -1) {
                 newfd = openFile(tokens[i + 1], O_RDONLY);
-            else
+                if (newfd == -1)
+                    return -1;
+            } else
                 newfd = fileFD;
 
             linkFileDescriptors(0, newfd);
@@ -303,6 +316,7 @@ void setRedirections(char **tokens)
             i--;
         }
     }
+    return 0;
 }
 
 // Used after executing a command to reset the file descriptors to their original state.
@@ -336,10 +350,7 @@ int openFile(char *file, int flags)
     // Open the target file.
     int newfd = open(file, flags , 0644);
     if (newfd == -1)
-    {
-        perror("open error");
-        exit(1);
-    }
+        return -1;
 
     openedFiles[currentFileIndex].filename = file;
     openedFiles[currentFileIndex].fd = newfd;
