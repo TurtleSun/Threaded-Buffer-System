@@ -347,6 +347,11 @@ void linkFileDescriptors(int oldfd, int newfd)
 // Opens a file with the given flags and returns the file descriptor.
 int openFile(char *file, int flags)
 {
+    if (currentFileIndex == 128) {
+        perror("Too many files opened");
+        return -1;
+    }
+    
     // Open the target file.
     int newfd = open(file, flags , 0644);
     if (newfd == -1)

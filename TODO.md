@@ -1,7 +1,6 @@
 ## Myshell
 - Tidy up possible edge cases
-  - `ls -la >` yields an open error, need to identify missing redirection operand.
-  - need to check if we maxed out our file descriptors
+  - Probably optional: sh program runs ls and continues after "ls<EOF>", but ours runs ls and just stops
 - Enable piping in myshell
   - `ls | wc`
   - `ls -la | wc`
