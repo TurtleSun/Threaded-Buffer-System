@@ -39,7 +39,7 @@ int savedStdin;
 int savedStderr;
 
 void processInput(char *);
-void executeCommands(char **, int);
+void executeCommands(char **);
 void forkAndExecuteProc(char **);
 char **splitBySpace(char *);
 int setRedirections(char **, int);
@@ -157,7 +157,7 @@ void processInput(char *str)
     {
         // Extract the command and arguments by means of checking the spaces.
         tokens = splitBySpace(inputtedCmds[i]);
-        executeCommands(tokens, 0);
+        executeCommands(tokens);
     }
 }
 
@@ -204,21 +204,20 @@ char **splitBySpace(char *str)
     return tokens;
 }
 
-// Executes the commands in the tokens array.
-void executeCommands(char **tokens, int fromPipe)
+// Executes the commands in the tokens array assuming there are no pipes.
+void executeCommands(char **tokens)
 {
-    if (!fromPipe)
+
+    // Calls setPipes to check if there are pipes. If so, let setPipes/executePipes do the execution.
+    int pipesFound = setPipes(tokens);
+    if (pipesFound == -1)
     {
-        int pipesFound = setPipes(tokens);
-        if (pipesFound == -1)
-        {
-            perror("Bad Pipe Input");
-            return;
-        }
-        else if (pipesFound == 1)
-        {
-            return;
-        }
+        perror("Bad Pipe Input");
+        return;
+    }
+    else if (pipesFound == 1)
+    {
+        return;
     }
 
     int setRedReturn = setRedirections(tokens, numTokens);
@@ -462,10 +461,13 @@ void executePipes(char ** subCmds[], int numSubCmds)
         pipes[i][1] = pipefd[1];
     }
 
+    int forkRets[numSubCmds];
+
     // Iterate over each command and execute them
     for (int i = 0; i < numSubCmds; i++) {
 
         int forkRet = fork();
+        forkRets[i] = forkRet;
 
         // The fork failed for whatever reason.
         if (forkRet == -1)
@@ -510,14 +512,16 @@ void executePipes(char ** subCmds[], int numSubCmds)
                 close(pipes[i-1][0]);
                 close(pipes[i-1][1]);
             }
+        }
+    }
 
-            // Waiting for the child (command) to execute.
-            int waitRet = waitpid(forkRet, NULL, 0);
-            if (waitRet == -1)
-            {
-                perror("waitpid error");
-                exit(1);
-            }
+    // Waiting for the children (subcommands) to execute.
+    for (int i = 0; i < numSubCmds; i++) {
+        int waitRet = waitpid(forkRets[i], NULL, 0);
+        if (waitRet == -1)
+        {
+            perror("waitpid error");
+            exit(1);
         }
     }
     return;
