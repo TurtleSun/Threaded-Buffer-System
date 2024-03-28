@@ -33,17 +33,19 @@ struct openedFile
 struct openedFile openedFiles[128];
 int currentFileIndex;
 
-
 // Used for resetting file descriptors after redirections.
 int savedStdout;
 int savedStdin;
 int savedStderr;
 
 void processInput(char *);
-void executeCommands(char **);
+void executeCommands(char **, int);
+void forkAndExecuteProc(char **);
 char **splitBySpace(char *);
 int setRedirections(char **);
 void resetRedirections(void);
+int setPipes(char **);
+void executePipes(char ***, int);
 int openFile(char *, int);
 void linkFileDescriptors(int, int);
 int isFileOpened(char *);
@@ -99,8 +101,10 @@ int main(int argc, char **argv)
 
         // Begin processing.
         processInput(receivedInput);
+
+        // Reset any redirections from the previous command.
+        resetRedirections();
     }
-    printf("\n");
     return 0;
 }
 
@@ -152,7 +156,7 @@ void processInput(char *str)
     {
         // Extract the command and arguments by means of checking the spaces.
         tokens = splitBySpace(inputtedCmds[i]);
-        executeCommands(tokens);
+        executeCommands(tokens, 0);
     }
 }
 
@@ -200,15 +204,29 @@ char **splitBySpace(char *str)
 }
 
 // Executes the commands in the tokens array.
-void executeCommands(char **tokens)
+void executeCommands(char **tokens, int fromPipe)
 {
+    if (!fromPipe)
+    {
+        int pipesFound = setPipes(tokens);
+        if (pipesFound == -1)
+        {
+            perror("Bad Pipe Input");
+            return;
+        }
+        else if (pipesFound == 1)
+        {
+            return;
+        }
+    }
+
     int setRedReturn = setRedirections(tokens);
-    if (setRedReturn == -1) {
+    if (setRedReturn == -1)
+    {
         perror("Bad Input for Redirection");
         return;
     }
 
-    // Fork and execute the command.
     int forkRet = fork();
     if (forkRet == -1) // Fork failed
     {
@@ -217,7 +235,12 @@ void executeCommands(char **tokens)
     }
     else if (forkRet == 0) // Child process - do the command.
     {
-        execvp(tokens[0], tokens);
+        int execRet = execvp(tokens[0], tokens);
+        if (execRet == -1)
+        {
+            perror("exec error");
+            exit(1);
+        }
         exit(0);
     }
     else // Parent process - just wait for the child.
@@ -225,14 +248,14 @@ void executeCommands(char **tokens)
         waitpid(forkRet, NULL, 0);
     }
 
-    resetRedirections();
+    return;
 }
 
 // Iterates over the list of tokens for a command and sets any needed redirections, in and out.
 int setRedirections(char **tokens)
 {
     int isRedirecting = 0;
-    int newfd = -2;
+    int newFileFD = -2;
 
     for (int i = 0; i < numTokens; i++)
     {
@@ -241,62 +264,70 @@ int setRedirections(char **tokens)
         // Redirect stdout and stderr to the same file
         if (strcmp(tokens[i], "&>") == 0)
         {
-            int fileFD = isFileOpened(tokens[i+1]);
-            if (fileFD == -1) {
-                newfd = openFile(tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
-                if (newfd == -1)
+            int fileFD = isFileOpened(tokens[i + 1]);
+            if (fileFD == -1)
+            {
+                newFileFD = openFile(tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
+                if (newFileFD == -1)
                     return -1;
-            } else
-                newfd = fileFD;
+            }
+            else
+                newFileFD = fileFD;
 
-            linkFileDescriptors(1, newfd);
-            linkFileDescriptors(2, newfd);
+            linkFileDescriptors(newFileFD, 1);
+            linkFileDescriptors(newFileFD, 2);
             isRedirecting = 1;
         }
 
         // Redirecting stdout to a file.
         if (strcmp(tokens[i], ">") == 0 || strcmp(tokens[i], "1>") == 0)
         {
-            int fileFD = isFileOpened(tokens[i+1]);
-            if (fileFD == -1) {
-                newfd = openFile(tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
-                if (newfd == -1)
+            int fileFD = isFileOpened(tokens[i + 1]);
+            if (fileFD == -1)
+            {
+                newFileFD = openFile(tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
+                if (newFileFD == -1)
                     return -1;
-            } else
-                newfd = fileFD;
+            }
+            else
+                newFileFD = fileFD;
 
-            linkFileDescriptors(1, newfd);
+            linkFileDescriptors(newFileFD, 1);
             isRedirecting = 1;
         }
 
         // Redirecting stderr to a file.
         if (strcmp(tokens[i], "2>") == 0)
         {
-            int fileFD = isFileOpened(tokens[i+1]);
-            if (fileFD == -1) {
-                newfd = openFile(tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
-                if (newfd == -1)
+            int fileFD = isFileOpened(tokens[i + 1]);
+            if (fileFD == -1)
+            {
+                newFileFD = openFile(tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
+                if (newFileFD == -1)
                     return -1;
-            } else
-                newfd = fileFD;
+            }
+            else
+                newFileFD = fileFD;
 
-            linkFileDescriptors(2, newfd);
+            linkFileDescriptors(newFileFD, 2);
             isRedirecting = 1;
         }
 
         // Redirecting stdin to a file.
         if (strcmp(tokens[i], "<") == 0)
         {
-            int fileFD = isFileOpened(tokens[i+1]);
+            int fileFD = isFileOpened(tokens[i + 1]);
 
-            if (fileFD == -1) {
-                newfd = openFile(tokens[i + 1], O_RDONLY);
-                if (newfd == -1)
+            if (fileFD == -1)
+            {
+                newFileFD = openFile(tokens[i + 1], O_RDONLY);
+                if (newFileFD == -1)
                     return -1;
-            } else
-                newfd = fileFD;
+            }
+            else
+                newFileFD = fileFD;
 
-            linkFileDescriptors(0, newfd);
+            linkFileDescriptors(newFileFD, 0);
             isRedirecting = 1;
         }
 
@@ -332,11 +363,167 @@ void resetRedirections()
     }
 }
 
+// Iterates over the list of tokens for a command and sets up commands for piping as needed.
+int setPipes(char **tokens)
+{
+    // Check for pipes in the command.
+    int numPipes = 0;
+    for (int i = 0; i < numTokens; i++)
+    {
+        // Check if a pipe is the last token in the command - this is invalid.
+        if (i == numTokens - 1 && strcmp(tokens[i], "|") == 0)
+        {
+            perror("Bad Pipe Input");
+            return -1;
+        }
+
+        // Check if a pipe is found in the current token.
+        if (strcmp(tokens[i], "|") == 0)
+            numPipes++;
+    }
+
+    // No pipes found in command, return to resume normal execution in executeCommands().
+    if (numPipes == 0)
+    {
+        return 0;
+    }
+
+    int numSubCmds = 0;
+    char **subCmds[numTokens];
+
+    for (int i = 0; i < numTokens; i++)
+    {
+        subCmds[i] = malloc(sizeof(char **));
+        if (subCmds[i] == NULL)
+        {
+            perror("malloc error");
+            exit(1);
+        }
+    }
+
+    int currSubCmdIdx = 0;
+    for (int i = 0; i < numTokens; i++)
+    {
+        if (strcmp(tokens[i], "|") == 0)
+        {
+            numSubCmds++;
+            currSubCmdIdx = 0;
+        }
+        else
+        {
+            subCmds[numSubCmds] = realloc(subCmds[numSubCmds], sizeof(char *) * (currSubCmdIdx + 2));
+            subCmds[numSubCmds][currSubCmdIdx] = tokens[i];
+            subCmds[numSubCmds][currSubCmdIdx + 1] = NULL;
+            currSubCmdIdx++;
+        }
+    }
+
+    // Account for the command after the last pipe.
+    numSubCmds++;
+
+    // Execute the commands with pipes.
+    executePipes(subCmds, numSubCmds);
+
+    // Reset the file descriptors to their original state.
+    resetRedirections();
+
+    return 1;
+}
+
+// Takes in previously derived subCmds and executes them in a pipeline fashion.
+void executePipes(char ** subCmds[], int numSubCmds)
+{
+    int numPipes = numSubCmds - 1;
+
+    int * pipes[numPipes];
+    int pipefd[2];
+    
+    // Iterate over each required pipe and initialize it.
+    for (int i = 0; i < numPipes; i++)
+    {
+        pipes[i] = malloc(sizeof(int) * 2);
+        if (pipes[i] == NULL)
+        {
+            perror("malloc error");
+            exit(1);
+        }
+
+        // Creating the pipe
+        int pipeRet = pipe(pipefd);
+        if (pipeRet == -1)
+        {
+            perror("pipe error");
+            exit(1);
+        }
+
+        // Initializing the individual read/write ends of the pipes with FDs.
+        pipes[i][0] = pipefd[0];
+        pipes[i][1] = pipefd[1];
+    }
+
+    // Iterate over each command and execute them
+    for (int i = 0; i < numSubCmds; i++) {
+        int forkRet = fork();
+
+        // The fork failed for whatever reason.
+        if (forkRet == -1)
+        {
+            perror("fork error");
+            exit(1);
+        }
+
+        // Fork executed - I am now the child process, so do the command.
+        else if (forkRet == 0)
+        {
+            // All but first command will read from a pipe that we link to stdin.
+            if (i != 0) {
+                linkFileDescriptors(pipes[i-1][0], 0);
+                close(pipes[i-1][1]);
+            }
+
+            // All but last command will write into a pipe that we link to stdout.
+            if (i != numSubCmds - 1) {
+                linkFileDescriptors(pipes[i][1], 1);
+                close(pipes[i][0]);
+            }
+
+            // Execute the command.
+            int execRet = execvp(subCmds[i][0], subCmds[i]);
+            if (execRet == -1)
+            {
+                perror("exec error");
+                exit(1);
+            }
+
+            exit(0);
+        }
+
+        // Fork executed - I am the parent, just close pipe connections and wait for child.
+        else
+        {
+            // Closing unneeded pipe connections.
+            if (i != 0) {
+                close(pipes[i-1][0]);
+                close(pipes[i-1][1]);
+            }
+
+            // Waiting for the child (command) to execute.
+            int waitRet = waitpid(forkRet, NULL, 0);
+            if (waitRet == -1)
+            {
+                perror("waitpid error");
+                exit(1);
+            }
+        }
+    }
+    return;
+}
+
 // Utilizes dup2 to link file descriptors to the target file.
 void linkFileDescriptors(int oldfd, int newfd)
 {
     // Duplicate target file stream to stdin.
-    int dupRet = dup2(newfd, oldfd);
+    int dupRet = dup2(oldfd, newfd);
     if (dupRet == -1)
     {
         perror("dup error");
@@ -347,27 +534,31 @@ void linkFileDescriptors(int oldfd, int newfd)
 // Opens a file with the given flags and returns the file descriptor.
 int openFile(char *file, int flags)
 {
-    if (currentFileIndex == 128) {
+    if (currentFileIndex == 128)
+    {
         perror("Too many files opened");
         return -1;
     }
-    
+
     // Open the target file.
-    int newfd = open(file, flags , 0644);
-    if (newfd == -1)
+    int newFileFD = open(file, flags, 0644);
+    if (newFileFD == -1)
         return -1;
 
     openedFiles[currentFileIndex].filename = file;
-    openedFiles[currentFileIndex].fd = newfd;
+    openedFiles[currentFileIndex].fd = newFileFD;
     currentFileIndex++;
 
-    return newfd;
+    return newFileFD;
 }
 
 // Checks if we've previously openend a file. If so, return the file descriptor.
-int isFileOpened(char * filename) {
-    for (int i = 0; i < 128; i++) {
-        if (openedFiles[i].filename != NULL && strcmp(openedFiles[i].filename, filename) == 0) {
+int isFileOpened(char *filename)
+{
+    for (int i = 0; i < 128; i++)
+    {
+        if (openedFiles[i].filename != NULL && strcmp(openedFiles[i].filename, filename) == 0)
+        {
             return openedFiles[i].fd;
         }
     }
