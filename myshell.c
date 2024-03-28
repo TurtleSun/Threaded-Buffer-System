@@ -42,13 +42,14 @@ void processInput(char *);
 void executeCommands(char **, int);
 void forkAndExecuteProc(char **);
 char **splitBySpace(char *);
-int setRedirections(char **);
+int setRedirections(char **, int);
 void resetRedirections(void);
 int setPipes(char **);
 void executePipes(char ***, int);
 int openFile(char *, int);
 void linkFileDescriptors(int, int);
 int isFileOpened(char *);
+int getNumTokens(char **);
 
 int main(int argc, char **argv)
 {
@@ -220,7 +221,7 @@ void executeCommands(char **tokens, int fromPipe)
         }
     }
 
-    int setRedReturn = setRedirections(tokens);
+    int setRedReturn = setRedirections(tokens, numTokens);
     if (setRedReturn == -1)
     {
         perror("Bad Input for Redirection");
@@ -252,7 +253,7 @@ void executeCommands(char **tokens, int fromPipe)
 }
 
 // Iterates over the list of tokens for a command and sets any needed redirections, in and out.
-int setRedirections(char **tokens)
+int setRedirections(char **tokens, int numTokens)
 {
     int isRedirecting = 0;
     int newFileFD = -2;
@@ -463,6 +464,7 @@ void executePipes(char ** subCmds[], int numSubCmds)
 
     // Iterate over each command and execute them
     for (int i = 0; i < numSubCmds; i++) {
+
         int forkRet = fork();
 
         // The fork failed for whatever reason.
@@ -486,6 +488,8 @@ void executePipes(char ** subCmds[], int numSubCmds)
                 linkFileDescriptors(pipes[i][1], 1);
                 close(pipes[i][0]);
             }
+
+            setRedirections(subCmds[i], getNumTokens(subCmds[i]));
 
             // Execute the command.
             int execRet = execvp(subCmds[i][0], subCmds[i]);
@@ -563,4 +567,11 @@ int isFileOpened(char *filename)
         }
     }
     return -1;
+}
+
+int getNumTokens (char ** tokens) {
+    int numTokens = 0;
+    while (tokens[numTokens] != NULL)
+        numTokens++;
+    return numTokens;
 }
