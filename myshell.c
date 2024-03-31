@@ -130,7 +130,6 @@ int main(int argc, char **argv)
         // Catch the case where the user presses ctrl+d twice in a row.
         if (feof(stdin) && strncmp(receivedInput, prevInput, strlen(receivedInput)) == 0) {
             printf("\n");
-            clearAllProcs();
             break;
         } else {
             strcpy(prevInput, receivedInput);
@@ -147,7 +146,6 @@ int main(int argc, char **argv)
 
         // Check if we have reached the end of stdin.
         if (feof(stdin)) {
-            clearAllProcs();
             break;
         }
     }
@@ -666,12 +664,11 @@ void informBackgroundCompletion() {
     int status;
     pid_t pid;
 
-    // Handle foreground processes that called this handler.
-    for (int i = 0; i < procList.numProcs; i++) {
-        if (waitpid(procList.proc[i].pid, &status, WNOHANG) > 0) {
+    // Handle background processes that called this handler.
+    for (int i = procList.numProcs-1; i >= 0; i--) {
+        if (procList.proc->isBkgd == 1 && waitpid(procList.proc[i].pid, &status, WNOHANG) > 0) {
             printf("Background process %s with ID %d has completed.\n", procList.proc[i].cmd, procList.proc[i].pid);
             procList = removeProcess(procList, procList.proc[i].pid);
-            return;
         }
     }
 
