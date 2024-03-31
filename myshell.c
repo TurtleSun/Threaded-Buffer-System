@@ -7,22 +7,37 @@
 #include <sys/stat.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <setjmp.h>
 
-// Used to maintain list of commands.
-int numCmds;
-char **inputtedCmds;
+// myshell.c - a really bad shell program: Jake Gustin
 
-// Used to maintain list of tokens in a command.
-int numTokens;
-char **tokens;
+// Used to maintain metadata about commands.
+struct command {
+    char * str;
+    char ** tokens;
+    int isBkgd;
+    int numTokens;
+};
 
-// Used to maintain list of child processes (especially background tasks)
-int numPids;
-int *pids;
+// Used to maintain metadata about a list of commands.
+struct commandList {
+    struct command * cmd;
+    int numCmds;
+};
 
-// receivedInput acts as input buffer. Compared against prevInput to check for EOF.
-char *receivedInput;
-char *prevInput;
+// Used to maintain metadata about a list of processes.
+struct process {
+    pid_t pid;
+    char * cmd;
+    int isBkgd;
+};
+
+// Used to maintain metadata about a list of processes.
+struct processList {
+    struct process * proc;
+    int numProcs;
+};
+struct processList procList = {NULL, 0};
 
 // Used to maintain file descriptors for files used in redirections.
 struct openedFile
@@ -30,29 +45,48 @@ struct openedFile
     char *filename;
     int fd;
 };
-struct openedFile openedFiles[128];
-int currentFileIndex;
+
+// Used to maintain metadata about a list of opened files.
+struct openedFileList
+{
+    struct openedFile *files;
+    int numFiles;
+};
+struct openedFileList openFileList = {NULL, 0};
 
 // Used for resetting file descriptors after redirections.
 int savedStdout;
 int savedStdin;
 int savedStderr;
 
-void processInput(char *);
-void executeCommands(char **);
-void forkAndExecuteProc(char **);
-char **splitBySpace(char *);
-int setRedirections(char **, int);
-void resetRedirections(void);
-int setPipes(char **);
-void executePipes(char ***, int);
-int openFile(char *, int);
-void linkFileDescriptors(int, int);
-int isFileOpened(char *);
-int getNumTokens(char **);
+sigjmp_buf ctrlc_buf;
+
+// Function prototypes.
+struct commandList processInput(char *);
+struct command tokenizeCommand(struct command);
+struct command initializeCommand();
+struct process initializeProcess();
+struct commandList addCommand(struct commandList, struct command);
+struct processList addProcess(struct processList, struct process);
+struct processList removeProcess(struct processList, int);
+int openFile(struct openedFileList, char *, int);
+struct openedFileList addFile(struct openedFileList, struct openedFile);
+struct openedFileList resetFileList(struct openedFileList);
+void executeCommands(struct command);
+void processPipeCommands(struct command);
+void executePipeCommands(struct commandList);
+int setRedirections(struct command *);
+void resetRedirections();
+void clearAllForegroundProcs();
+void clearAllProcs();
+void informBackgroundCompletion();
+
 
 int main(int argc, char **argv)
 {
+    // Check if stdin is a terminal.
+    int isTerminal = isatty(0);
+    
     // Save the current file descriptors for stdout, stdin, and stderr.
     savedStdout = dup(1);
     savedStdin = dup(0);
@@ -64,376 +98,226 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    numPids = 0;
-    currentFileIndex = 0;
-
-    int isTerminal = isatty(0);
-
     // Initialize memory, assuming one element for now.
-    receivedInput = malloc(1024); // Unknown input size, so assume fixed buffer size.
-    prevInput = malloc(1024);
-    inputtedCmds = malloc(sizeof(char *));
-    pids = malloc(sizeof(int));
+    char * receivedInput = malloc(1024); // Unknown input size, so assume fixed buffer size.
+    char * prevInput = malloc(1024);
 
     // Check if malloc was successful.
-    if (pids == NULL || receivedInput == NULL || prevInput == NULL || inputtedCmds == NULL)
+    if (receivedInput == NULL || prevInput == NULL)
     {
         perror("malloc error");
         exit(1);
     }
 
-    // Create a loop to get input from stdin and process it.
-    int continueProcessing = 1;
-    while (continueProcessing)
+    signal(SIGINT, clearAllForegroundProcs);
+    signal(SIGCHLD, informBackgroundCompletion);
+    while (1)
     {
+        // Set up a signal handler for SIGINT (Ctrl-C).
+        if (sigsetjmp(ctrlc_buf, 1) == 1)
+        {
+            resetRedirections();
+            printf("\n");
+        }
+
         // If stdin is a terminal, create a prompt for user input.
         if (isTerminal)
             printf("myshell> ");
 
         // Get input from stdin, check if we have reached the end of stdin.
         fgets(receivedInput, 1024, stdin);
-        if (feof(stdin) && (strcmp(receivedInput, prevInput) == 0 || isTerminal)) // Terminal entered Ctrl-D or EOF on empty line in file.
-            break;
-        else if (feof(stdin)) // EOF on the same line as new input in a file, do one more iteration.
-            continueProcessing = 0;
 
-        // Copy input for next iteration to check for EOF.
-        strcpy(prevInput, receivedInput);
+        // Catch the case where the user presses ctrl+d twice in a row.
+        if (feof(stdin) && strncmp(receivedInput, prevInput, strlen(receivedInput)) == 0) {
+            printf("\n");
+            clearAllProcs();
+            break;
+        } else {
+            strcpy(prevInput, receivedInput);
+        }
 
         // Begin processing.
-        processInput(receivedInput);
+        struct commandList cmdList = processInput(receivedInput);
+        for (int i = 0; i < cmdList.numCmds; i++)
+            executeCommands(cmdList.cmd[i]);
 
-        // Reset any redirections from the previous command.
+        // Reset any redirections and close any applicable connections.
         resetRedirections();
+        openFileList = resetFileList(openFileList);
+
+        // Check if we have reached the end of stdin.
+        if (feof(stdin)) {
+            clearAllProcs();
+            break;
+        }
     }
     return 0;
 }
 
-// Processing string input to determine commands to run
-void processInput(char *str)
-{
-    // Copy input to a new string to avoid modifying the original.
-    char *strCopy = malloc(strlen(str) + 1);
-    if (strCopy == NULL)
+struct commandList processInput(char * str) {
+    // Remove newline character from input.
+    if (str[strlen(str) - 1] == '\n')
+        str[strlen(str) - 1] = '\0';
+
+    // Replace &> operator with special character to avoid strtok issues.
+    char * tempStr = malloc(1024);
+    char * tempStrPtr = tempStr;
+    if (tempStr == NULL)
     {
         perror("malloc error");
         exit(1);
     }
-    strcpy(strCopy, str);
+    strcpy(tempStr, str);
 
-    // Remove trailiing newline from input
-    if (strCopy[strlen(strCopy) - 1] == '\n')
-        strCopy[strlen(strCopy) - 1] = '\0';
-
-    numCmds = 0;
-    while (1)
-    {
-        // Check if there are no more commands
-        if (strcmp(strCopy, "") == 0)
-            break;
-
-        // Split input into commands based on semicolons.
-        strtok(strCopy, ";");
-
-        // Allocating memory for the command.
-        inputtedCmds[numCmds] = malloc(strlen(strCopy) + 1);
-        inputtedCmds = realloc(inputtedCmds, sizeof(char *) * (numCmds + 1));
-        if (inputtedCmds == NULL || inputtedCmds[numCmds] == NULL)
-        {
-            perror("malloc error");
-            exit(1);
-        }
-
-        // Copy command into inputtedCmds
-        strcpy(inputtedCmds[numCmds], strCopy);
-
-        // Increment numCmds and move to next command
-        numCmds++;
-        strCopy = strCopy + strlen(strCopy) + 1;
+    while ((tempStr = strstr(tempStr, "&>")) != NULL) {
+        // replace &> with special string that doesn't have &
+        memcpy(tempStr, "8>", 2);
+        tempStr += 2;
     }
 
-    // Iterate through each set of commands identified.
-    for (int i = 0; i < numCmds; i++)
-    {
-        // Extract the command and arguments by means of checking the spaces.
-        tokens = splitBySpace(inputtedCmds[i]);
-        executeCommands(tokens);
-    }
-}
+    // Set our current string to the result of the replacement.
+    strcpy(str, tempStrPtr);
 
-// Takes a string and splits it into substrings based on spaces.
-char **splitBySpace(char *str)
-{
-    // Initializing memory, assuming one element for now in tokens.
-    tokens = malloc(sizeof(char *));
-    if (tokens == NULL)
+    // Initialize memory, same size as full buffer for now.
+    char * foregroundStr = malloc(1024);
+    char * backgroundStr = malloc(1024);
+    if (foregroundStr == NULL || backgroundStr == NULL)
     {
         perror("malloc error");
         exit(1);
     }
 
-    numTokens = 0;
-    while (1)
-    {
-        // Check if there are no more commands
+    // Initialize command list.
+    struct commandList cmdList = {NULL, 0};
+
+    // Begin processing.
+    while (1) {
+
+        // Check if we have reached the end of the input.
         if (strcmp(str, "") == 0)
             break;
 
-        // Split input into commands based on spaces.
-        str = strtok(str, " ");
+        // Initialize a new command.
+        struct command cmd = initializeCommand();
 
-        // Check if the remaining string is empty. (Space gets replaced with null char in strtok)
-        if (str == NULL)
-            break;
+        // Check if the next command(s) is/are a background task.
+        strcpy(foregroundStr, str);
+        strcpy(backgroundStr, str);
 
-        // Allocating memory
-        tokens = realloc(tokens, sizeof(char *) * (numTokens + 1));
-        tokens[numTokens] = malloc(strlen(str) + 1);
-        if (tokens == NULL || tokens[numTokens] == NULL)
-        {
-            perror("malloc error");
-            exit(1);
+        strtok(foregroundStr, ";");
+        strtok(backgroundStr, "&");
+
+        if (strlen(backgroundStr) < strlen(foregroundStr)) {
+            cmd.isBkgd = 1;
+            strcpy(cmd.str, backgroundStr);
+        } else {
+            cmd.isBkgd = 0;
+            strcpy(cmd.str, foregroundStr);
         }
 
-        // Copy the current string into the tokens array.
-        strcpy(tokens[numTokens], str);
-        numTokens++;
-        str = str + strlen(str) + 1;
-    }
+        // Update cmd's tokenized command attribute.
+        cmd = tokenizeCommand(cmd);
 
-    return tokens;
+        // Add current command to the command list.
+        cmdList = addCommand(cmdList, cmd);
+
+        // Onto the next command.
+        str = str + strlen(cmd.str) + 1;
+    }
+    return cmdList;
 }
 
-// Executes the commands in the tokens array assuming there are no pipes.
-void executeCommands(char **tokens)
-{
-
-    // Calls setPipes to check if there are pipes. If so, let setPipes/executePipes do the execution.
-    int pipesFound = setPipes(tokens);
-    if (pipesFound == -1)
-    {
-        perror("Bad Pipe Input");
+void executeCommands(struct command cmd) {
+    // Empty command!
+    if (cmd.numTokens == 0)
         return;
-    }
-    else if (pipesFound == 1)
+
+    // Pipe commands require further processing.
+    if (strchr(cmd.str, '|') != NULL)
     {
+        processPipeCommands(cmd);
         return;
     }
 
-    int setRedReturn = setRedirections(tokens, numTokens);
-    if (setRedReturn == -1)
-    {
-        perror("Bad Input for Redirection");
+    int redirRet = setRedirections(&cmd);
+    if (redirRet == -1) {
+        perror("Invalid Redirection(s)");
         return;
     }
 
     int forkRet = fork();
-    if (forkRet == -1) // Fork failed
+    if (forkRet == -1)
     {
         perror("fork error");
-        exit(1);
-    }
-    else if (forkRet == 0) // Child process - do the command.
-    {
-        int execRet = execvp(tokens[0], tokens);
-        if (execRet == -1)
-        {
-            perror("exec error");
+        return;
+    } else if (forkRet == 0) {
+        // Child process.
+        setpgid(0, 0);
+        int execRet = execvp(cmd.tokens[0], cmd.tokens);
+        if (execRet == -1) {
+            perror("execvp error");
             exit(1);
         }
-        exit(0);
+        exit(0);    
+    } else {
+        // Parent process.
+        procList = addProcess(procList, (struct process){forkRet, cmd.str, cmd.isBkgd});
+        if (!(cmd.isBkgd)) {
+            waitpid(forkRet, NULL, 0);
+            procList = removeProcess(procList, forkRet);
+        }
     }
-    else // Parent process - just wait for the child.
-    {
-        waitpid(forkRet, NULL, 0);
-    }
-
     return;
 }
 
-// Iterates over the list of tokens for a command and sets any needed redirections, in and out.
-int setRedirections(char **tokens, int numTokens)
-{
-    int isRedirecting = 0;
-    int newFileFD = -2;
+void processPipeCommands(struct command cmd) {
+    // Initialize memory, assuming one element for now.
+    struct commandList subCmdList = {NULL, 0};
 
-    for (int i = 0; i < numTokens; i++)
+    // Split the command string into individual commands.
+    char * str = malloc(strlen(cmd.str) + 1);
+    if (str == NULL)
     {
-        isRedirecting = 0;
-
-        // Redirect stdout and stderr to the same file
-        if (strcmp(tokens[i], "&>") == 0)
-        {
-            int fileFD = isFileOpened(tokens[i + 1]);
-            if (fileFD == -1)
-            {
-                newFileFD = openFile(tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
-                if (newFileFD == -1)
-                    return -1;
-            }
-            else
-                newFileFD = fileFD;
-
-            linkFileDescriptors(newFileFD, 1);
-            linkFileDescriptors(newFileFD, 2);
-            isRedirecting = 1;
-        }
-
-        // Redirecting stdout to a file.
-        if (strcmp(tokens[i], ">") == 0 || strcmp(tokens[i], "1>") == 0)
-        {
-            int fileFD = isFileOpened(tokens[i + 1]);
-            if (fileFD == -1)
-            {
-                newFileFD = openFile(tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
-                if (newFileFD == -1)
-                    return -1;
-            }
-            else
-                newFileFD = fileFD;
-
-            linkFileDescriptors(newFileFD, 1);
-            isRedirecting = 1;
-        }
-
-        // Redirecting stderr to a file.
-        if (strcmp(tokens[i], "2>") == 0)
-        {
-            int fileFD = isFileOpened(tokens[i + 1]);
-            if (fileFD == -1)
-            {
-                newFileFD = openFile(tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
-                if (newFileFD == -1)
-                    return -1;
-            }
-            else
-                newFileFD = fileFD;
-
-            linkFileDescriptors(newFileFD, 2);
-            isRedirecting = 1;
-        }
-
-        // Redirecting stdin to a file.
-        if (strcmp(tokens[i], "<") == 0)
-        {
-            int fileFD = isFileOpened(tokens[i + 1]);
-
-            if (fileFD == -1)
-            {
-                newFileFD = openFile(tokens[i + 1], O_RDONLY);
-                if (newFileFD == -1)
-                    return -1;
-            }
-            else
-                newFileFD = fileFD;
-
-            linkFileDescriptors(newFileFD, 0);
-            isRedirecting = 1;
-        }
-
-        // We did some redirection on the current token. Adjust the tokens array accordingly for later execution.
-        if (isRedirecting)
-        {
-            // Remove the redirection operator and the target file from the tokens array.
-            for (int j = i; j < numTokens - 2; j++)
-                tokens[j] = tokens[j + 2];
-
-            // After shifting, set the last two elements to NULL.
-            tokens[numTokens - 2] = NULL;
-            tokens[numTokens - 1] = NULL;
-
-            // Adjust the number of tokens, and decrement i to check the current, shifted token again.
-            numTokens -= 2;
-            i--;
-        }
-    }
-    return 0;
-}
-
-// Used after executing a command to reset the file descriptors to their original state.
-void resetRedirections()
-{
-    int resetStdout = dup2(savedStdout, 1);
-    int resetStdin = dup2(savedStdin, 0);
-    int resetStderr = dup2(savedStderr, 2);
-    if (resetStdout == -1 || resetStdin == -1 || resetStderr == -1)
-    {
-        perror("dup error");
+        perror("malloc error");
         exit(1);
     }
-}
+    strcpy(str, cmd.str);
 
-// Iterates over the list of tokens for a command and sets up commands for piping as needed.
-int setPipes(char **tokens)
-{
-    // Check for pipes in the command.
-    int numPipes = 0;
-    for (int i = 0; i < numTokens; i++)
-    {
-        // Check if a pipe is the last token in the command - this is invalid.
-        if (i == numTokens - 1 && strcmp(tokens[i], "|") == 0)
-        {
-            perror("Bad Pipe Input");
-            return -1;
-        }
+    while (1) {
+        // Check if there are no more commands.
+        if (strcmp(str, "") == 0)
+            break;
 
-        // Check if a pipe is found in the current token.
-        if (strcmp(tokens[i], "|") == 0)
-            numPipes++;
+        // Initialize a new command.
+        struct command newCmd = initializeCommand();
+        newCmd.isBkgd = cmd.isBkgd;
+
+        // Split input into commands based on pipes.
+        str = strtok(str, "|");
+
+        // Check if the remaining string is empty. (Pipe gets replaced with null char in strtok)
+        if (str == NULL)
+            break;
+
+        // Copy the current string into the new command.
+        strcpy(newCmd.str, str);
+
+        // Update newCmd's tokenized command attribute.
+        newCmd = tokenizeCommand(newCmd);
+
+        // Add current command to the command list.
+        subCmdList = addCommand(subCmdList, newCmd);
+
+        // Onto the next command.
+        str = str + strlen(newCmd.str) + 1;
     }
-
-    // No pipes found in command, return to resume normal execution in executeCommands().
-    if (numPipes == 0)
-    {
-        return 0;
-    }
-
-    int numSubCmds = 0;
-    char **subCmds[numTokens];
-
-    for (int i = 0; i < numTokens; i++)
-    {
-        subCmds[i] = malloc(sizeof(char **));
-        if (subCmds[i] == NULL)
-        {
-            perror("malloc error");
-            exit(1);
-        }
-    }
-
-    int currSubCmdIdx = 0;
-    for (int i = 0; i < numTokens; i++)
-    {
-        if (strcmp(tokens[i], "|") == 0)
-        {
-            numSubCmds++;
-            currSubCmdIdx = 0;
-        }
-        else
-        {
-            subCmds[numSubCmds] = realloc(subCmds[numSubCmds], sizeof(char *) * (currSubCmdIdx + 2));
-            subCmds[numSubCmds][currSubCmdIdx] = tokens[i];
-            subCmds[numSubCmds][currSubCmdIdx + 1] = NULL;
-            currSubCmdIdx++;
-        }
-    }
-
-    // Account for the command after the last pipe.
-    numSubCmds++;
-
-    // Execute the commands with pipes.
-    executePipes(subCmds, numSubCmds);
-
-    // Reset the file descriptors to their original state.
+    executePipeCommands(subCmdList);
     resetRedirections();
-
-    return 1;
+    return;
 }
 
-// Takes in previously derived subCmds and executes them in a pipeline fashion.
-void executePipes(char ** subCmds[], int numSubCmds)
-{
-    int numPipes = numSubCmds - 1;
+void executePipeCommands(struct commandList cmdList) {
+    int numPipes = cmdList.numCmds - 1;
 
     int * pipes[numPipes];
     int pipefd[2];
@@ -461,10 +345,10 @@ void executePipes(char ** subCmds[], int numSubCmds)
         pipes[i][1] = pipefd[1];
     }
 
-    int forkRets[numSubCmds];
+    int forkRets[cmdList.numCmds];
 
     // Iterate over each command and execute them
-    for (int i = 0; i < numSubCmds; i++) {
+    for (int i = 0; i < cmdList.numCmds; i++) {
 
         int forkRet = fork();
         forkRets[i] = forkRet;
@@ -479,35 +363,34 @@ void executePipes(char ** subCmds[], int numSubCmds)
         // Fork executed - I am now the child process, so do the command.
         else if (forkRet == 0)
         {
+            setpgid(0, 0);
+
             // All but first command will read from a pipe that we link to stdin.
             if (i != 0) {
-                linkFileDescriptors(pipes[i-1][0], 0);
+                dup2(pipes[i-1][0], 0);
                 close(pipes[i-1][1]);
             }
 
             // All but last command will write into a pipe that we link to stdout.
-            if (i != numSubCmds - 1) {
-                linkFileDescriptors(pipes[i][1], 1);
+            if (i != cmdList.numCmds - 1) {
+                dup2(pipes[i][1], 1);
                 close(pipes[i][0]);
             }
 
-            setRedirections(subCmds[i], getNumTokens(subCmds[i]));
+            setRedirections(&(cmdList.cmd[i]));
 
             // Execute the command.
-            int execRet = execvp(subCmds[i][0], subCmds[i]);
+            int execRet = execvp(cmdList.cmd[i].tokens[0], cmdList.cmd[i].tokens);
             if (execRet == -1)
             {
                 perror("exec error");
                 exit(1);
             }
-
             exit(0);
         }
 
         // Fork executed - I am the parent, just close pipe connections and wait for child.
-        else
-        {
-            // Closing unneeded pipe connections.
+        else {
             if (i != 0) {
                 close(pipes[i-1][0]);
                 close(pipes[i-1][1]);
@@ -516,66 +399,281 @@ void executePipes(char ** subCmds[], int numSubCmds)
     }
 
     // Waiting for the children (subcommands) to execute.
-    for (int i = 0; i < numSubCmds; i++) {
-        int waitRet = waitpid(forkRets[i], NULL, 0);
-        if (waitRet == -1)
-        {
-            perror("waitpid error");
-            exit(1);
+    for (int i = 0; i < cmdList.numCmds; i++) {
+        procList = addProcess(procList, (struct process){forkRets[i], cmdList.cmd[i].str, cmdList.cmd[i].isBkgd});
+        if (!(cmdList.cmd[i].isBkgd)) {
+            waitpid(forkRets[i], NULL, 0);
+            procList = removeProcess(procList, forkRets[i]);
         }
     }
     return;
 }
 
-// Utilizes dup2 to link file descriptors to the target file.
-void linkFileDescriptors(int oldfd, int newfd)
-{
-    // Duplicate target file stream to stdin.
-    int dupRet = dup2(oldfd, newfd);
-    if (dupRet == -1)
-    {
-        perror("dup error");
-        exit(1);
-    }
-}
+int setRedirections(struct command * cmdPtr) {
+    struct command cmd = *cmdPtr;
 
-// Opens a file with the given flags and returns the file descriptor.
-int openFile(char *file, int flags)
-{
-    if (currentFileIndex == 128)
-    {
-        perror("Too many files opened");
-        return -1;
-    }
+    for (int i = 0; i < cmd.numTokens - 1; i++) {
+        int isRedirecting = 0;
+        if (strcmp(cmd.tokens[i], ">") == 0 || strcmp(cmd.tokens[i], "1>") == 0) {
+            isRedirecting = 1;
+            int newFileFD = openFile(openFileList, cmd.tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
+            if (newFileFD == -1)
+                return -1;
+            dup2(newFileFD, 1);
+        } else if (strcmp(cmd.tokens[i], "<") == 0) {
+            isRedirecting = 1;
+            int newFileFD = openFile(openFileList, cmd.tokens[i + 1], O_RDONLY);
+            if (newFileFD == -1)
+                return -1;
+            dup2(newFileFD, 0);
+        } else if (strcmp(cmd.tokens[i], "2>") == 0) {
+            isRedirecting = 1;
+            int newFileFD = openFile(openFileList, cmd.tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
+            if (newFileFD == -1)
+                return -1;
+            dup2(newFileFD, 2);
+        } else if (strcmp(cmd.tokens[i], "8>") == 0) {
+            isRedirecting = 1;
+            int newFileFD = openFile(openFileList, cmd.tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
+            if (newFileFD == -1)
+                return -1;
+            dup2(newFileFD, 1);
+            dup2(newFileFD, 2);
+        }
 
-    // Open the target file.
-    int newFileFD = open(file, flags, 0644);
-    if (newFileFD == -1)
-        return -1;
+        if (isRedirecting) {
+            for (int j = i; j < cmd.numTokens - 2; j++) {
+                cmd.tokens[j] = cmd.tokens[j + 2];
+            }
 
-    openedFiles[currentFileIndex].filename = file;
-    openedFiles[currentFileIndex].fd = newFileFD;
-    currentFileIndex++;
+            // Set last two elements to NULL.
+            cmd.tokens[cmd.numTokens - 1] = NULL;
+            cmd.tokens[cmd.numTokens - 2] = NULL;
 
-    return newFileFD;
-}
-
-// Checks if we've previously openend a file. If so, return the file descriptor.
-int isFileOpened(char *filename)
-{
-    for (int i = 0; i < 128; i++)
-    {
-        if (openedFiles[i].filename != NULL && strcmp(openedFiles[i].filename, filename) == 0)
-        {
-            return openedFiles[i].fd;
+            cmd.numTokens -= 2;
+            i--;
         }
     }
-    return -1;
+    *cmdPtr = cmd;
+    return 0;
 }
 
-int getNumTokens (char ** tokens) {
+void resetRedirections() {
+    dup2(savedStdout, 1);
+    dup2(savedStdin, 0);
+    dup2(savedStderr, 2);
+}
+
+int openFile(struct openedFileList fileList, char *filename, int flags) {
+    int newFileFD = open(filename, flags, 0644);
+    if (newFileFD == -1)
+    {
+        perror("open error");
+        return -1;
+    }
+
+    addFile(fileList, (struct openedFile){filename, newFileFD});
+    return newFileFD;
+} 
+
+// Tokenize a command string into an array of tokens.
+struct command tokenizeCommand(struct command cmd) {
+    // Initializing memory, assuming one element for now in tokens.
+    char ** tokens = malloc(sizeof(char *));
+    char * str = malloc(strlen(cmd.str) + 1);
+    if (tokens == NULL || str == NULL)
+    {
+        perror("malloc error");
+        exit(1);
+    }
+
+    strcpy(str, cmd.str);
+
     int numTokens = 0;
-    while (tokens[numTokens] != NULL)
+    while (1)
+    {
+        // Check if there are no more commands
+        if (strcmp(str, "") == 0)
+            break;
+
+        // Split input into commands based on spaces.
+        str = strtok(str, " ");
+
+        // Check if the remaining string is empty. (Space gets replaced with null char in strtok)
+        if (str == NULL)
+            break;
+
+        // Allocating memory
+        tokens = realloc(tokens, sizeof(char *) * (numTokens + 2)); // +2 for new token and then NULL
+        tokens[numTokens] = malloc(strlen(str) + 1);
+        if (tokens == NULL || tokens[numTokens] == NULL)
+        {
+            perror("malloc error");
+            exit(1);
+        }
+
+        // Copy the current string into the tokens array.
+        strcpy(tokens[numTokens], str);
         numTokens++;
-    return numTokens;
+        str = str + strlen(str) + 1;
+    }
+
+    // Ensuring the last token is NULL
+    tokens[numTokens] = NULL;
+
+    // Update the command struct with the tokenized command.
+    cmd.tokens = tokens;
+    cmd.numTokens = numTokens;
+
+    return cmd;
+}
+
+struct command initializeCommand() {
+    struct command cmd;
+    cmd.isBkgd = 0;
+    cmd.numTokens = 0;
+    cmd.str = malloc(1024);
+    cmd.tokens = malloc(sizeof(char *));
+    if (cmd.tokens == NULL || cmd.str == NULL)
+    {
+        perror("malloc error");
+        exit(1);
+    }
+
+    return cmd;
+}
+
+struct commandList addCommand(struct commandList cmdList, struct command cmd) {
+    cmdList.numCmds++;
+    cmdList.cmd = realloc(cmdList.cmd, cmdList.numCmds * sizeof(struct command));
+    if (cmdList.cmd == NULL && cmdList.numCmds > 0)
+    {
+        perror("realloc error");
+        exit(1);
+    }
+    cmdList.cmd[cmdList.numCmds - 1] = cmd;
+    return cmdList;
+}
+
+struct process initializeProcess() {
+    struct process proc;
+    proc.cmd = malloc(1024);
+    if (proc.cmd == NULL)
+    {
+        perror("malloc error");
+        exit(1);
+    }
+    proc.isBkgd = 0;
+    proc.pid = 0;
+    return proc;
+}
+
+struct processList addProcess(struct processList procList, struct process proc) {
+    procList.numProcs++;
+    procList.proc = realloc(procList.proc, procList.numProcs * sizeof(struct process));
+    if (procList.proc == NULL && procList.numProcs > 0)
+    {
+        perror("realloc error");
+        exit(1);
+    }
+    procList.proc[procList.numProcs - 1] = proc;
+    return procList;
+}
+
+struct processList removeProcess(struct processList procList, int pid) {
+    for (int i = 0; i < procList.numProcs; i++)
+    {
+        if (procList.proc[i].pid == pid)
+        {
+            for (int j = i; j < procList.numProcs - 1; j++)
+            {
+                procList.proc[j] = procList.proc[j + 1];
+            }
+            procList.numProcs--;
+            procList.proc = realloc(procList.proc, procList.numProcs * sizeof(struct process));
+            if (procList.proc == NULL && procList.numProcs > 0)
+            {
+                perror("realloc error");
+                exit(1);
+            }
+            break;
+        }
+    }
+    return procList;
+}
+
+struct openedFileList addFile(struct openedFileList fileList, struct openedFile file) {
+    fileList.numFiles++;
+    fileList.files = realloc(fileList.files, fileList.numFiles * sizeof(struct openedFile));
+    if (fileList.files == NULL && fileList.numFiles > 0)
+    {
+        perror("realloc error");
+        exit(1);
+    }
+    fileList.files[fileList.numFiles - 1] = file;
+    return fileList;
+}
+
+struct openedFileList resetFileList (struct openedFileList fileList) {
+    for (int i = 0; i < fileList.numFiles; i++)
+    {
+        close(fileList.files[i].fd);
+    }
+    fileList.numFiles = 0;
+    fileList.files = realloc(fileList.files, fileList.numFiles * sizeof(struct openedFile));
+    if (fileList.files == NULL && fileList.numFiles > 0)
+    {
+        perror("realloc error");
+        exit(1);
+    }
+    return fileList;
+}
+
+void clearAllForegroundProcs() {
+    signal(SIGINT, clearAllForegroundProcs); // Re-register signal handler
+    for (int i = 0; i < procList.numProcs; i++) {
+        if (!(procList.proc[i].isBkgd)) {
+            printf("KILLING A PROC");
+            kill(procList.proc[i].pid, SIGTERM);
+            int waitRet = waitpid(procList.proc[i].pid, NULL, 0);
+            if (waitRet == -1)
+            {
+                perror("waitpid error");
+                exit(1);
+            }
+            procList = removeProcess(procList, procList.proc[i].pid);
+        }
+    }
+
+    siglongjmp(ctrlc_buf, 1);
+}
+
+void clearAllProcs() {
+    for (int i = 0; i < procList.numProcs; i++) {
+        kill(procList.proc[i].pid, SIGTERM);
+        int waitRet = waitpid(procList.proc[i].pid, NULL, 0);
+        if (waitRet == -1)
+        {
+            perror("waitpid error");
+            exit(1);
+        }
+        procList = removeProcess(procList, procList.proc[i].pid);
+    }
+}
+
+void informBackgroundCompletion() {
+    signal(SIGCHLD, informBackgroundCompletion); // Re-register signal handler
+    int status;
+    pid_t pid;
+
+    // Handle foreground processes that called this handler.
+    for (int i = 0; i < procList.numProcs; i++) {
+        if (waitpid(procList.proc[i].pid, &status, WNOHANG) > 0) {
+            printf("Background process %s with ID %d has completed.\n", procList.proc[i].cmd, procList.proc[i].pid);
+            procList = removeProcess(procList, procList.proc[i].pid);
+            return;
+        }
+    }
+
+    return;
 }
