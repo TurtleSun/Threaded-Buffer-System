@@ -32,21 +32,19 @@ int main(int argc, char *argv[]){
             exit(EXIT_FAILURE);
         } else if (pid == 0) { // Child process
             if (i == 0) { // First process (observe)
-                close(pipes[i][READ_END]); // Close the unused read end
-                execute_process("observe", STDIN_FILENO, pipes[i][WRITE_END]);
+                close(pipes[i][0]); // Close the unused read end
+                execute_process("observe", STDIN_FILENO, pipes[i][1]);
             } else if (i == num_processes - 1) { // Last process (tapplot)
-                close(pipes[i-1][WRITE_END]); // Close the unused write end
-                execute_process("tapplot", pipes[i-1][READ_END], STDOUT_FILENO);
+                close(pipes[i-1][1]); // Close the unused write end
+                execute_process("tapplot", pipes[i-1][0], STDOUT_FILENO);
             } else { // Middle process (reconstruct)
-                close(pipes[i-1][WRITE_END]);
-                close(pipes[i][READ_END]);
-                execute_process("reconstruct", pipes[i-1][READ_END], pipes[i][WRITE_END]);
+                close(pipes[i-1][1]);
+                close(pipes[i][0]);
+                execute_process("reconstruct", pipes[i-1][0], pipes[i][1]);
             }
         }
     }
-
-    // Wait for all children to finish
-
+    
     // parent process closes all ends of the pipes and waits for children to finish
     // parent process is the tapper program
     for (int i = 0; i < 2; ++i) {
@@ -54,5 +52,12 @@ int main(int argc, char *argv[]){
         close(pipes[i][1]);
     }
 
+    // wait for all children to finish
+    for (int i = 0; i < num_processes; ++i) {
+        wait(NULL);
+    }
+
+    // exit
+    return 0;
 }
 
