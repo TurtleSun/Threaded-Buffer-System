@@ -44,7 +44,7 @@ int main(int argc, char *argv[]){
             }
         }
     }
-    
+
     // parent process closes all ends of the pipes and waits for children to finish
     // parent process is the tapper program
     for (int i = 0; i < 2; ++i) {
@@ -59,5 +59,25 @@ int main(int argc, char *argv[]){
 
     // exit
     return 0;
+}
+
+
+///// execlp or execv
+void execute_process(char *program, int read_fd, int write_fd) {
+    // Redirect STDIN if read_fd is not standard input
+    if (read_fd != STDIN_FILENO) {
+        dup2(read_fd, STDIN_FILENO);
+        close(read_fd);
+    }
+
+    // Redirect STDOUT if write_fd is not standard output
+    if (write_fd != STDOUT_FILENO) {
+        dup2(write_fd, STDOUT_FILENO);
+        close(write_fd);
+    }
+
+    execlp(program, program, (char *)NULL);
+    perror("execlp"); // execlp only returns on error
+    exit(EXIT_FAILURE);
 }
 
