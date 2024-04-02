@@ -43,17 +43,25 @@ int main(int argc, char *argv[]){
         if (cpid == -1) {
             perror("fork");
             exit(EXIT_FAILURE);
-        } else if (pid == 0) { // Child process
+        } else if (cpid == 0) { // Child process
             if (i == 0) { // First process (observe)
-                close(pipes[i][0]); // Close the unused read end
                 execute_process("observe", STDIN_FILENO, pipes[i][1]);
             } else if (i == num_processes - 1) { // Last process (tapplot)
-                close(pipes[i-1][1]); // Close the unused write end
                 execute_process("tapplot", pipes[i-1][0], STDOUT_FILENO);
             } else { // Middle process (reconstruct)
-                close(pipes[i-1][1]);
-                close(pipes[i][0]);
                 execute_process("reconstruct", pipes[i-1][0], pipes[i][1]);
+            }
+        } else if (cpid > 0) {
+            // parent process
+            // do something??
+            // close the unused file descpritors 
+            if (i == 0) {
+                close(pipes[i][1]);
+            } else if (i == num_processes - 1) {
+                close(pipes[i-1][0]);
+            } else {
+                close(pipes[i-1][0]);
+                close(pipes[i][1]);
             }
         }
     }
