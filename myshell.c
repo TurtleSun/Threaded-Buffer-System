@@ -80,6 +80,7 @@ void resetRedirections();
 void clearAllForegroundProcs();
 void clearAllProcs();
 void informBackgroundCompletion();
+struct command processQuotes(struct command);
 
 
 int main(int argc, char **argv)
@@ -137,6 +138,9 @@ int main(int argc, char **argv)
 
         // Begin processing.
         struct commandList cmdList = processInput(receivedInput);
+        if (cmdList.numCmds == -1) {
+            continue;
+        }
         for (int i = 0; i < cmdList.numCmds; i++)
             executeCommands(cmdList.cmd[i]);
 
@@ -215,6 +219,10 @@ struct commandList processInput(char * str) {
 
         // Update cmd's tokenized command attribute.
         cmd = tokenizeCommand(cmd);
+        cmd = processQuotes(cmd);
+        if (cmd.numTokens == -1) {
+            return (struct commandList){NULL, -1};
+        }
 
         // Add current command to the command list.
         cmdList = addCommand(cmdList, cmd);
@@ -631,7 +639,6 @@ void clearAllForegroundProcs() {
     signal(SIGINT, clearAllForegroundProcs); // Re-register signal handler
     for (int i = 0; i < procList.numProcs; i++) {
         if (!(procList.proc[i].isBkgd)) {
-            printf("KILLING A PROC");
             kill(procList.proc[i].pid, SIGTERM);
             int waitRet = waitpid(procList.proc[i].pid, NULL, 0);
             if (waitRet == -1)
@@ -673,4 +680,85 @@ void informBackgroundCompletion() {
     }
 
     return;
+}
+
+// Merge tokens that are surrounded by quotes.
+struct command processQuotes(struct command cmd) {
+
+    int numTokens = cmd.numTokens;
+    int numQuotes = 0;
+    int strIdx = 0;
+    char ** tokens = malloc(sizeof(char **) * cmd.numTokens);
+    char * buffer = malloc(1024);
+    if (tokens == NULL || buffer == NULL)
+    {
+        perror("malloc error");
+        exit(1);
+    }
+
+    for (int i = 0; i < cmd.numTokens; i++) {
+        tokens[i] = malloc(sizeof(char *) * strlen(cmd.tokens[i]));
+        if (tokens[i] == NULL) {
+            perror("malloc error");
+            exit(1);
+        }
+    }
+
+    // Copy tokens to temporary tokens array.
+    for (int i = 0; i < cmd.numTokens; i++) {
+        strcpy(tokens[i], cmd.tokens[i]);
+    }
+
+    for (int tokenInd = 0; tokenInd < numTokens; tokenInd++) {
+        while(strIdx < strlen(tokens[tokenInd])) {
+            if (tokens[tokenInd][strIdx] == '"' && (strIdx == 0 || tokens[tokenInd][strIdx-1] != '\\')) {
+                for (int j = strIdx; j < strlen(tokens[tokenInd]); j++) {
+                    tokens[tokenInd][j] = tokens[tokenInd][j+1];
+                }
+                strIdx--;
+                numQuotes++;
+            } else if (tokens[tokenInd][strIdx] == '"' && tokens[tokenInd][strIdx-1] == '\\') {
+                for (int j = strIdx-1; j < strlen(tokens[tokenInd]); j++) {
+                    tokens[tokenInd][j] = tokens[tokenInd][j+1];
+                }
+                strIdx--;
+            }
+            strIdx++;
+        }
+
+        if (numQuotes % 2 == 1 && tokenInd == numTokens-1 && (!isatty(1) || feof(stdin))) {
+            fprintf(stderr, "Unclosed set of quotation marks!\n");
+            return (struct command){NULL, NULL, 0, -1};
+        } else if (numQuotes % 2 == 1 && tokenInd == numTokens-1 && isatty(1)) {
+            char * buffer = malloc(1024);
+            if (buffer == NULL) {
+                perror("malloc error");
+                exit(1);
+            }
+            printf("> ");
+            fgets(buffer, 1024, stdin);
+            strcat(tokens[tokenInd], buffer);
+            tokenInd--;
+        } else if (numQuotes % 2 == 1) {
+            strcat(tokens[tokenInd], " ");
+            strcat(tokens[tokenInd], tokens[tokenInd+1]);
+            for (int j = tokenInd+1; j < numTokens-1; j++) {
+                tokens[j] = tokens[j+1];
+            }
+            tokens[numTokens-1] = NULL;
+            numTokens--;
+            tokens=realloc(tokens, sizeof(char *) * numTokens);
+            if (tokens == NULL) {
+                perror("malloc error");
+                exit(1);
+            }
+            tokenInd--;
+        } else {
+            strIdx = 0;
+        }
+    }
+    tokens[numTokens] = NULL;
+    cmd.tokens=tokens;
+    cmd.numTokens=numTokens;
+    return cmd;
 }
