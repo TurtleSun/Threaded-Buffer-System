@@ -6,13 +6,26 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <sys/types.h>
 
 int main(int argc, char *argv[]){
     // number of processes is 3: p1 observe, p2 reconstruct, p3 tapplot
     int num_processes = 3;
+
     // number of pipes is 2 
     // one from observe to reconstrcut, another one from reconstruct to tapplot
-    int pipes[2][2];
+    int pipefd[2][2];
+    // pipefd[0]: pipe 0 (between p1 and p2), pipefd[1]: pipe 1 between p2 and p3
+    //pipefd[x][0]: read endpoint pipe x, pipefd[x][1]: write endpoint pipe x
+
+    // child pid
+    pid_t cpid;
+
+    // check input argc correct
+    if (argc != 2){
+        printf("Please specify an input file!\n");
+        return 0;
+    }
 
     // create pipes
     for (int i = 0; i < num_processes - 1; i++){
@@ -26,8 +39,8 @@ int main(int argc, char *argv[]){
     // observe, reconstruct, tapplot
     // fork and exec
     for (int i = 0; i < num_processes; ++i) {
-        pid_t pid = fork();
-        if (pid == -1) {
+        cpid = fork();
+        if (cpid == -1) {
             perror("fork");
             exit(EXIT_FAILURE);
         } else if (pid == 0) { // Child process
