@@ -80,7 +80,7 @@ void resetRedirections();
 void clearAllForegroundProcs();
 void clearAllProcs();
 void informBackgroundCompletion();
-struct command processQuotes(struct command);
+//struct command processQuotes(struct command);
 
 
 int main(int argc, char **argv)
@@ -219,7 +219,7 @@ struct commandList processInput(char * str) {
 
         // Update cmd's tokenized command attribute.
         cmd = tokenizeCommand(cmd);
-        cmd = processQuotes(cmd);
+        //cmd = processQuotes(cmd);
         if (cmd.numTokens == -1) {
             return (struct commandList){NULL, -1};
         }
@@ -683,7 +683,7 @@ void informBackgroundCompletion() {
 }
 
 // Merge tokens that are surrounded by quotes.
-struct command processQuotes(struct command cmd) {
+/*struct command processQuotes(struct command cmd) {
 
     int numTokens = cmd.numTokens;
     int numQuotes = 0;
@@ -761,4 +761,4 @@ struct command processQuotes(struct command cmd) {
     cmd.tokens=tokens;
     cmd.numTokens=numTokens;
     return cmd;
-}
+}*/
