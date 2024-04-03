@@ -289,9 +289,11 @@ void processPipeCommands(struct command cmd) {
     }
     strcpy(str, cmd.str);
 
+    int remainingStrLen = strlen(str);
+
     while (1) {
         // Check if there are no more commands.
-        if (strcmp(str, "") == 0)
+        if (remainingStrLen <= 0)
             break;
 
         // Initialize a new command.
@@ -314,8 +316,10 @@ void processPipeCommands(struct command cmd) {
         // Add current command to the command list.
         subCmdList = addCommand(subCmdList, newCmd);
 
-        // Onto the next command.
+        // Onto the next command - update remaining strlen to account for pipe as well
+        remainingStrLen = remainingStrLen - strlen(newCmd.str) - 1;
         str = str + strlen(newCmd.str) + 1;
+
     }
     executePipeCommands(subCmdList);
     resetRedirections();
