@@ -9,7 +9,7 @@
 #include <fcntl.h>
 #include <setjmp.h>
 
-// myshell.c - a really bad shell program: Jake Gustin
+// myshell.c - a really bad shell program
 
 // Used to maintain metadata about commands.
 struct command {
@@ -59,6 +59,7 @@ int savedStdout;
 int savedStdin;
 int savedStderr;
 
+// Serves as the buffer for jumps after processing Ctrl-C
 sigjmp_buf ctrlc_buf;
 
 // Function prototypes.
@@ -78,10 +79,7 @@ void executePipeCommands(struct commandList);
 int setRedirections(struct command *);
 void resetRedirections();
 void clearAllForegroundProcs();
-void clearAllProcs();
 void informBackgroundCompletion();
-//struct command processQuotes(struct command);
-
 
 int main(int argc, char **argv)
 {
@@ -110,11 +108,12 @@ int main(int argc, char **argv)
         exit(1);
     }
 
+    // Setting signal handlers. Older method, but functional.
     signal(SIGINT, clearAllForegroundProcs);
     signal(SIGCHLD, informBackgroundCompletion);
     while (1)
     {
-        // Set up a signal handler for SIGINT (Ctrl-C).
+        // In case we're returning from handling a SIGINT.
         if (sigsetjmp(ctrlc_buf, 1) == 1)
         {
             resetRedirections();
@@ -156,12 +155,12 @@ int main(int argc, char **argv)
     return 0;
 }
 
+// Take the input provided by the user and create a commandList from it.
 struct commandList processInput(char * str) {
     // Remove newline character from input.
     if (str[strlen(str) - 1] == '\n')
         str[strlen(str) - 1] = '\0';
 
-    // Replace &> operator with special character to avoid strtok issues.
     char * tempStr = malloc(1024);
     char * tempStrPtr = tempStr;
     if (tempStr == NULL)
@@ -171,6 +170,7 @@ struct commandList processInput(char * str) {
     }
     strcpy(tempStr, str);
 
+    // Replace &> operator with alternate string to avoid strtok issues with & operator.
     while ((tempStr = strstr(tempStr, "&>")) != NULL) {
         // replace &> with special string that doesn't have &
         memcpy(tempStr, "8>", 2);
@@ -219,7 +219,6 @@ struct commandList processInput(char * str) {
 
         // Update cmd's tokenized command attribute.
         cmd = tokenizeCommand(cmd);
-        //cmd = processQuotes(cmd);
         if (cmd.numTokens == -1) {
             return (struct commandList){NULL, -1};
         }
@@ -233,6 +232,7 @@ struct commandList processInput(char * str) {
     return cmdList;
 }
 
+// We have a command, now let's execute it.
 void executeCommands(struct command cmd) {
     // Empty command!
     if (cmd.numTokens == 0)
@@ -245,6 +245,7 @@ void executeCommands(struct command cmd) {
         return;
     }
 
+    // Set any required redirections according to the command.
     int redirRet = setRedirections(&cmd);
     if (redirRet == -1) {
         perror("Invalid Redirection(s)");
@@ -256,18 +257,21 @@ void executeCommands(struct command cmd) {
     {
         perror("fork error");
         return;
-    } else if (forkRet == 0) {
-        // Child process.
+    } else if (forkRet == 0) { // Child process.
+        // Set task to its own process group so background tasks don't die yet on SIGINT
         setpgid(0, 0);
+
+        // Execute the task!
         int execRet = execvp(cmd.tokens[0], cmd.tokens);
         if (execRet == -1) {
             perror("execvp error");
             exit(1);
         }
         exit(0);    
-    } else {
-        // Parent process.
+    } else { // Parent process
         procList = addProcess(procList, (struct process){forkRet, cmd.str, cmd.isBkgd});
+
+        // If not a background task, wait for the cmd to finish before continuing.
         if (!(cmd.isBkgd)) {
             waitpid(forkRet, NULL, 0);
             procList = removeProcess(procList, forkRet);
@@ -276,6 +280,7 @@ void executeCommands(struct command cmd) {
     return;
 }
 
+// If a command has pipes, parse out the subcommands in the pipelined sequence.
 void processPipeCommands(struct command cmd) {
     // Initialize memory, assuming one element for now.
     struct commandList subCmdList = {NULL, 0};
@@ -289,6 +294,7 @@ void processPipeCommands(struct command cmd) {
     }
     strcpy(str, cmd.str);
 
+    // Used to determine when we're done parsing out the subcommands.
     int remainingStrLen = strlen(str);
 
     while (1) {
@@ -321,12 +327,16 @@ void processPipeCommands(struct command cmd) {
         str = str + strlen(newCmd.str) + 1;
 
     }
+    // All set, let's run the commands in the pipe!
     executePipeCommands(subCmdList);
     resetRedirections();
+
     return;
 }
 
+// Execute a pipelined command sequence
 void executePipeCommands(struct commandList cmdList) {
+    // Used to determine how many pipes to set up.
     int numPipes = cmdList.numCmds - 1;
 
     int * pipes[numPipes];
@@ -355,6 +365,7 @@ void executePipeCommands(struct commandList cmdList) {
         pipes[i][1] = pipefd[1];
     }
 
+    // Creating a list of PIDs involved in the pipelined command sequence.
     int forkRets[cmdList.numCmds];
 
     // Iterate over each command and execute them
@@ -373,6 +384,7 @@ void executePipeCommands(struct commandList cmdList) {
         // Fork executed - I am now the child process, so do the command.
         else if (forkRet == 0)
         {
+            // Set task to its own process group so background tasks don't die yet on SIGINT
             setpgid(0, 0);
 
             // All but first command will read from a pipe that we link to stdin.
@@ -419,29 +431,38 @@ void executePipeCommands(struct commandList cmdList) {
     return;
 }
 
+// If a command requires redirections, set those up here and modify the command accordignly.
 int setRedirections(struct command * cmdPtr) {
     struct command cmd = *cmdPtr;
 
     for (int i = 0; i < cmd.numTokens - 1; i++) {
         int isRedirecting = 0;
+
+        // Redirecting stdout to a file
         if (strcmp(cmd.tokens[i], ">") == 0 || strcmp(cmd.tokens[i], "1>") == 0) {
             isRedirecting = 1;
             int newFileFD = openFile(openFileList, cmd.tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
             if (newFileFD == -1)
                 return -1;
             dup2(newFileFD, 1);
+        
+        // Redirecting stdin to a file
         } else if (strcmp(cmd.tokens[i], "<") == 0) {
             isRedirecting = 1;
             int newFileFD = openFile(openFileList, cmd.tokens[i + 1], O_RDONLY);
             if (newFileFD == -1)
                 return -1;
             dup2(newFileFD, 0);
+
+        // Redirecting stderr to a file
         } else if (strcmp(cmd.tokens[i], "2>") == 0) {
             isRedirecting = 1;
             int newFileFD = openFile(openFileList, cmd.tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
             if (newFileFD == -1)
                 return -1;
             dup2(newFileFD, 2);
+
+        // Redirecting stderr and stdout to a file (aka &> operator)
         } else if (strcmp(cmd.tokens[i], "8>") == 0) {
             isRedirecting = 1;
             int newFileFD = openFile(openFileList, cmd.tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
@@ -451,12 +472,13 @@ int setRedirections(struct command * cmdPtr) {
             dup2(newFileFD, 2);
         }
 
+        // If the current token was a redirect, shift over the remaining tokens
         if (isRedirecting) {
             for (int j = i; j < cmd.numTokens - 2; j++) {
                 cmd.tokens[j] = cmd.tokens[j + 2];
             }
 
-            // Set last two elements to NULL.
+            // Set last two elements to NULL, formerly the redirect info
             cmd.tokens[cmd.numTokens - 1] = NULL;
             cmd.tokens[cmd.numTokens - 2] = NULL;
 
@@ -464,16 +486,19 @@ int setRedirections(struct command * cmdPtr) {
             i--;
         }
     }
+    // Overwrite the cmd passed in to yield the correct tokens for later execution.
     *cmdPtr = cmd;
     return 0;
 }
 
+// Set the standard file descriptors back to the defaults.
 void resetRedirections() {
     dup2(savedStdout, 1);
     dup2(savedStdin, 0);
     dup2(savedStderr, 2);
 }
 
+// Open a file that can be used for redirecting stdin/out/err
 int openFile(struct openedFileList fileList, char *filename, int flags) {
     int newFileFD = open(filename, flags, 0644);
     if (newFileFD == -1)
@@ -538,6 +563,7 @@ struct command tokenizeCommand(struct command cmd) {
     return cmd;
 }
 
+// Setting up an empty command structure
 struct command initializeCommand() {
     struct command cmd;
     cmd.isBkgd = 0;
@@ -553,6 +579,7 @@ struct command initializeCommand() {
     return cmd;
 }
 
+// Adding a command structure into an existing commandList
 struct commandList addCommand(struct commandList cmdList, struct command cmd) {
     cmdList.numCmds++;
     cmdList.cmd = realloc(cmdList.cmd, cmdList.numCmds * sizeof(struct command));
@@ -565,6 +592,7 @@ struct commandList addCommand(struct commandList cmdList, struct command cmd) {
     return cmdList;
 }
 
+// Setting up a new process structure.
 struct process initializeProcess() {
     struct process proc;
     proc.cmd = malloc(1024);
@@ -578,6 +606,7 @@ struct process initializeProcess() {
     return proc;
 }
 
+// Adding a process into an existing processList structure
 struct processList addProcess(struct processList procList, struct process proc) {
     procList.numProcs++;
     procList.proc = realloc(procList.proc, procList.numProcs * sizeof(struct process));
@@ -590,6 +619,7 @@ struct processList addProcess(struct processList procList, struct process proc) 
     return procList;
 }
 
+// Removing a process from an existing processList structure
 struct processList removeProcess(struct processList procList, int pid) {
     for (int i = 0; i < procList.numProcs; i++)
     {
@@ -612,6 +642,7 @@ struct processList removeProcess(struct processList procList, int pid) {
     return procList;
 }
 
+// Adding a file into an existing openedFileList structure
 struct openedFileList addFile(struct openedFileList fileList, struct openedFile file) {
     fileList.numFiles++;
     fileList.files = realloc(fileList.files, fileList.numFiles * sizeof(struct openedFile));
@@ -624,6 +655,7 @@ struct openedFileList addFile(struct openedFileList fileList, struct openedFile 
     return fileList;
 }
 
+// Clearing all entries from an existing openedFileList structure, usually after all cmds are run
 struct openedFileList resetFileList (struct openedFileList fileList) {
     for (int i = 0; i < fileList.numFiles; i++)
     {
@@ -639,10 +671,12 @@ struct openedFileList resetFileList (struct openedFileList fileList) {
     return fileList;
 }
 
+// Called when a SIGINT is received, kills all foreground processes.
 void clearAllForegroundProcs() {
     signal(SIGINT, clearAllForegroundProcs); // Re-register signal handler
     for (int i = 0; i < procList.numProcs; i++) {
         if (!(procList.proc[i].isBkgd)) {
+            // If a foreground process, kill it and wait for its completion.
             kill(procList.proc[i].pid, SIGTERM);
             int waitRet = waitpid(procList.proc[i].pid, NULL, 0);
             if (waitRet == -1)
@@ -650,26 +684,16 @@ void clearAllForegroundProcs() {
                 perror("waitpid error");
                 exit(1);
             }
+            // Update the process list accordingly.
             procList = removeProcess(procList, procList.proc[i].pid);
         }
     }
 
+    // Jump back to our previous point, before entering the command.
     siglongjmp(ctrlc_buf, 1);
 }
 
-void clearAllProcs() {
-    for (int i = 0; i < procList.numProcs; i++) {
-        kill(procList.proc[i].pid, SIGTERM);
-        int waitRet = waitpid(procList.proc[i].pid, NULL, 0);
-        if (waitRet == -1)
-        {
-            perror("waitpid error");
-            exit(1);
-        }
-        procList = removeProcess(procList, procList.proc[i].pid);
-    }
-}
-
+// Called when a SIGCHLD is received, checks for and prints messages for all background tasks completed.
 void informBackgroundCompletion() {
     signal(SIGCHLD, informBackgroundCompletion); // Re-register signal handler
     int status;
@@ -685,84 +709,3 @@ void informBackgroundCompletion() {
 
     return;
 }
-
-// Merge tokens that are surrounded by quotes.
-/*struct command processQuotes(struct command cmd) {
-
-    int numTokens = cmd.numTokens;
-    int numQuotes = 0;
-    int strIdx = 0;
-    char ** tokens = malloc(sizeof(char **) * cmd.numTokens);
-    char * buffer = malloc(1024);
-    if (tokens == NULL || buffer == NULL)
-    {
-        perror("malloc error");
-        exit(1);
-    }
-
-    for (int i = 0; i < cmd.numTokens; i++) {
-        tokens[i] = malloc(sizeof(char *) * strlen(cmd.tokens[i]));
-        if (tokens[i] == NULL) {
-            perror("malloc error");
-            exit(1);
-        }
-    }
-
-    // Copy tokens to temporary tokens array.
-    for (int i = 0; i < cmd.numTokens; i++) {
-        strcpy(tokens[i], cmd.tokens[i]);
-    }
-
-    for (int tokenInd = 0; tokenInd < numTokens; tokenInd++) {
-        while(strIdx < strlen(tokens[tokenInd])) {
-            if (tokens[tokenInd][strIdx] == '"' && (strIdx == 0 || tokens[tokenInd][strIdx-1] != '\\')) {
-                for (int j = strIdx; j < strlen(tokens[tokenInd]); j++) {
-                    tokens[tokenInd][j] = tokens[tokenInd][j+1];
-                }
-                strIdx--;
-                numQuotes++;
-            } else if (tokens[tokenInd][strIdx] == '"' && tokens[tokenInd][strIdx-1] == '\\') {
-                for (int j = strIdx-1; j < strlen(tokens[tokenInd]); j++) {
-                    tokens[tokenInd][j] = tokens[tokenInd][j+1];
-                }
-                strIdx--;
-            }
-            strIdx++;
-        }
-
-        if (numQuotes % 2 == 1 && tokenInd == numTokens-1 && (!isatty(1) || feof(stdin))) {
-            fprintf(stderr, "Unclosed set of quotation marks!\n");
-            return (struct command){NULL, NULL, 0, -1};
-        } else if (numQuotes % 2 == 1 && tokenInd == numTokens-1 && isatty(1)) {
-            char * buffer = malloc(1024);
-            if (buffer == NULL) {
-                perror("malloc error");
-                exit(1);
-            }
-            printf("> ");
-            fgets(buffer, 1024, stdin);
-            strcat(tokens[tokenInd], buffer);
-            tokenInd--;
-        } else if (numQuotes % 2 == 1) {
-            strcat(tokens[tokenInd], " ");
-            strcat(tokens[tokenInd], tokens[tokenInd+1]);
-            for (int j = tokenInd+1; j < numTokens-1; j++) {
-                tokens[j] = tokens[j+1];
-            }
-            tokens[numTokens-1] = NULL;
-            numTokens--;
-            tokens=realloc(tokens, sizeof(char *) * numTokens);
-            if (tokens == NULL) {
-                perror("malloc error");
-                exit(1);
-            }
-            tokenInd--;
-        } else {
-            strIdx = 0;
-        }
-    }
-    tokens[numTokens] = NULL;
-    cmd.tokens=tokens;
-    cmd.numTokens=numTokens;
-    return cmd;
-}*/
