@@ -17,7 +17,7 @@
 
 int main(){
     // open shared memory that we initialized in tapper
-    int shm_fd = shmget(KEY, SHMSIZE, 0);
+    int shm_fd = shmget(KEY, SHMSIZE, 0666);
     char * shm_addr = shmat(shm_fd, NULL, 0);
     if (shm_addr == NULL) {
         // something still went horribly wrong
