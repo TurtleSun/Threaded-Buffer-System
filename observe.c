@@ -12,24 +12,18 @@
 #define MAX_NAME_LEN 100
 #define MAX_VALUE_LEN 100
 #define MAX_LINE_LEN 200
+#define KEY 1234
+#define SHMSIZE 100000
 
 int main(){
     // open shared memory that we initialized in tapper
-    int shm_fd = shm_open(SHM_NAME, O_RDWR, 0666);
-    void* shm_ptr = mmap(0, MAX_LINE_LEN, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-
-    // check if shared memory is opened successfully
-    if (shm_ptr == MAP_FAILED){
-        printf("Map failed\n");
-        return -1;
+    int shm_fd = shmget(KEY, SHMSIZE, 0);
+    char * shm_addr = shmat(shm_fd, NULL, 0);
+    if (shm_addr == NULL) {
+        // something still went horribly wrong
+        perror("malloc error");
+        exit(1);
     }
-
-    // open existing semaphores
-    // These semaphores are used for signaling when data is ready to be read from shared memory and for mutual exclusion access to the shared memory, respectively.
-    sem_t* sem_data_ready = sem_open(SEM_NAME_DATA_READY, 0);
-    sem_t* sem_mutex = sem_open(SEM_NAME_MUTEX, 0);
-    // they have read permission
-    // has to be initilized in tapper.c
 
     // read and parse from either a file or stdin
     char line[MAX_LINE_LEN];
@@ -53,24 +47,13 @@ int main(){
         // compare current value with last value, if they are different write value in shared memory
         if(strcmp(lastValue, value) != 0) {
             strcpy(lastValue, value);
-            // Wait for access to shared memory
-            sem_wait(sem_mutex); 
             // Write to shared memory
-            snprintf(shm_ptr, MAX_LINE_LEN, "%s=%s", name, value);
-            // Signal that data is ready
-            sem_post(sem_data_ready);
-            // Release access to shared memory
-            sem_post(sem_mutex);
+            snprintf(shm_addr, MAX_LINE_LEN, "%s=%s", name, value);
         }
     }
 
     // close shared memory
     close(shm_fd);
-    // unmap shared memory
-    munmap(shm_ptr, MAX_LINE_LEN);
-    // close semaphores
-    sem_close(sem_data_ready);
-    sem_close(sem_mutex);
 
     // exit
     return 0;

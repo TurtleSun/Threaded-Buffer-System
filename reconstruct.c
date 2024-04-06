@@ -8,30 +8,28 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/shm.h>
 #include <semaphore.h>
 
 // definitions
 
+#define OBSERVE_KEY 1234
+#define PLOT_KEY 5678
+#define SHMSIZE 100000
 
 int main(){
     // open shared memory that we initialized in tapper between observe and reconstruct
-    int shm_fd_obsrec = shm_open(SHM_NAME, O_RDWR, 0666);
-    char* shm_ptr_obsrec = mmap(NULL, MAX_LINE_LEN, PROT_READ, MAP_SHARED, shm_fd_obsrec, 0);
+    int shm_fd_obsrec = shmget(OBSERVE_KEY, SHMSIZE, 0);
+    char * shm_obsrec_addr = shmat(shm_fd_obsrec, NULL, 0);
 
     // also open shared memory that we initialized in tapper between reconstruct and tapplot
-    int shm_fd_rectap = shm_open(SHM_NAME, O_RDWR, 0666);
-    char* shm_ptr_rectap = mmap(NULL, MAX_SAMPLES * MAX_SAMPLE_SIZE, PROT_WRITE, MAP_SHARED, shm_fd_rectap, 0);
+    int shm_fd_rectap = shmget(PLOT_KEY, SHMSIZE, 0);
+    char * shm_rectap_addr = shmat(shm_fd_rectap, NULL, 0);
 
-    // open existing semaphores
-    sem_t *sem_observe_ready = sem_open(SEM_OBSERVE, 0);
-    sem_t *sem_tapplot_ready = sem_open(SEM_TAPPLOT, O_CREAT, 0666, 0);
-    sem_t *sem_mutex_observe = sem_open(SEM_MUTEX_OBSERVE, 0);
-    sem_t *sem_mutex_tapplot = sem_open(SEM_MUTEX_TAPPLOT, O_CREAT, 0666, 1);
-
-    // check if shared memory is opened successfully
-    if (shm_ptr_obsrec == MAP_FAILED || shm_ptr_rectap == MAP_FAILED){
-        printf("Map failed\n");
-        return -1;
+    if (shm_fd_obsrec == NULL || shm_fd_rectap == NULL) {
+        // something went horribly wrong
+        perror("shmatt error");
+        exit(1);
     }
 
     // read from shared memory
