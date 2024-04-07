@@ -44,11 +44,11 @@ int main(int argc, char *argv[]){
             exit(EXIT_FAILURE);
         } else if (cpid == 0) { // Child process
             if (i == 0) { // First process (observe)
-                execlp("observe", "observe", NULL);
+                execlp("./observe", "./observe", NULL);
             } else if (i == num_processes - 1) { // Last process (tapplot)
-                execlp("tapplot", "tapplot", NULL);
+                execlp("./tapplot", "./tapplot", NULL);
             } else { // Middle process (reconstruct)
-                execlp("reconstruct", "reconstruct", NULL);
+                execlp("./reconstruct", "./reconstruct", NULL);
             }
             perror("exec failure");
             exit(EXIT_FAILURE);

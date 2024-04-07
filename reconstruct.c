@@ -20,11 +20,11 @@
 int main(){
     // open shared memory that we initialized in tapper between observe and reconstruct
     int shm_fd_obsrec = shmget(OBSERVE_KEY, SHMSIZE, 0666);
-    char * shm_obsrec_addr = shmat(shm_fd_obsrec, NULL, 0);
+    void * shm_obsrec_addr = shmat(shm_fd_obsrec, NULL, 0);
 
     // also open shared memory that we initialized in tapper between reconstruct and tapplot
     int shm_fd_rectap = shmget(PLOT_KEY, SHMSIZE, 0666);
-    char * shm_rectap_addr = shmat(shm_fd_rectap, NULL, 0);
+    void * shm_rectap_addr = shmat(shm_fd_rectap, NULL, 0);
 
     if (shm_fd_obsrec == NULL || shm_fd_rectap == NULL) {
         // something went horribly wrong
