@@ -8,7 +8,7 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/shm.h>
-
+#include <stdbool.h>
 
 #define SHMSIZE 100000
 
@@ -17,11 +17,13 @@ int shmIDs[num_processes - 1];
 void * shmAddr[num_processes-1];
 key_t keys[2];
 
-// structure for child processes to know if asyn or not
+// struct to hold buffer configuration
 typedef struct {
-    int buffer_size;
-    bool is_async;
-} BufferInfo;
+    char isAsync[6];
+    char bufferSize[10];
+} BufferConfig;
+
+BufferConfig bufferInfo;
 
 // parse command line arguments function
 void parse_args(int argc, char *argv[]);
@@ -38,40 +40,34 @@ int main(int argc, char *argv[]){
         shmAddr[i] = shmat(shmIDs[i], NULL, 0);
     }
 
-    // child pid
-    pid_t cpid;
-
-    // check input argc correct
-    if (argc != 2){
-        printf("Please specify an input file!\n");
-        return 0;
-    }
-
     // execute process
     // observe, reconstruct, tapplot
     // fork and exec
     for (int i = 0; i < num_processes; ++i) {
-        cpid = fork();
+        pid_t cpid = fork();
         if (cpid == -1) {
             perror("fork");
-            exit(EXIT_FAILURE);
+            exit(1);
         } else if (cpid == 0) { // Child process
+        char *program;
             if (i == 0) { // First process (observe)
-                execlp("./observe", "./observe", NULL);
+            // pass in buffer size and type for when initializing buffer in children
+            program = "./observe";
             } else if (i == num_processes - 1) { // Last process (tapplot)
-                execlp("./tapplot", "./tapplot", NULL);
+            program = "./tapplot";
             } else { // Middle process (reconstruct)
-                execlp("./reconstruct", "./reconstruct", NULL);
+            program = "./reconstruct";
             }
-            perror("exec failure");
-            exit(EXIT_FAILURE);
+            // arguments for buffer for children passed through execvp
+            char *args[] = {program, "-b", bufferInfo.isAsync, "-s", bufferInfo.bufferSize, NULL};
+            execvp(program, args);
+            perror("execvp failure");
+            exit(1);
         }
     }
 
     // wait for all children to finish
-    for (int i = 0; i < num_processes; ++i) {
-        wait(NULL);
-    }
+    while (wait(NULL) > 0);
 
     // exit
     return 0;
@@ -83,36 +79,34 @@ void parse_args(int argc, char *argv[]){
         exit(1);
     }
 
+    // flags for buffer type and size if they are set
+    bool bufferTypeSet = false, bufferSizeSet = false;
+
+    // parse command line arguments
     for (int i = 1; i < argc; i++) {
+        // check for buffer type and size
         if (strcmp(argv[i], "-b") == 0 && i + 1 < argc) {
-            // Check buffer mode
-            if (strcmp(argv[i + 1], "async") == 0) {
-                // Asynchronous mode
-                buffer_info.is_async = true;
-            } else if (strcmp(argv[i + 1], "sync") == 0) {
-                // Synchronous mode
-                buffer_info.is_async = false;
-            } else {
-                fprintf(stderr, "Invalid buffer mode: %s\n", argv[i + 1]);
-                exit(EXIT_FAILURE);
-            }
-            i++; // Skip next argument since it's part of the current flag
+            // set buffer type
+            strncpy(bufferConfig.bufferType, argv[i + 1], sizeof(bufferConfig.bufferType) - 1);
+            bufferTypeSet = true;
+            i++; // Skip the value of "-b"
         } else if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
-            // Check buffer size
-            buffer_info.buffer_size = atoi(argv[i + 1]);
-            if (buffer_info.buffer_size <= 0) {
-                fprintf(stderr, "Invalid buffer size: %s\n", argv[i + 1]);
-                exit(EXIT_FAILURE);
-            }
-            }
+            // set buffer size
+            strncpy(bufferConfig.bufferSize, argv[i + 1], sizeof(bufferConfig.bufferSize) - 1);
+            bufferSizeSet = true;
+            i++; // Skip the value of "-s"
         } else {
             fprintf(stderr, "Invalid argument: %s\n", argv[i]);
-            exit(EXIT_FAILURE);
+            exit(1);
         }
     }
-    // for my sanity to know
-    // Output the buffering mode and buffer size for debugging purposes
-    
-    printf("Buffering mode: %s\n", is_async ? "async" : "sync");
-    printf("Buffer size (for sync mode): %d\n", buffer_size);
+
+    if (!bufferTypeSet || !bufferSizeSet) {
+        fprintf(stderr, "Both -b (buffer type) and -s (buffer size) must be specified.\n");
+        exit(1);
+    }
+
+    // Debugging output
+    printf("Buffering mode: %s\n", bufferConfig.bufferType);
+    printf("Buffer size: %s\n", bufferConfig.bufferSize);
 }
