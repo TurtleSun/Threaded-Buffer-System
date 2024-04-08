@@ -10,6 +10,7 @@
 #include <sys/mman.h>
 #include <sys/shm.h>
 #include <semaphore.h>
+#include <buffer.h>
 
 // definitions
 
@@ -33,6 +34,10 @@ int main(){
     }
 
     // read from shared memory
+    char line[SHMSIZE];
+    char lastValue[SHMSIZE] = {0};
+
+
     
 
 }
