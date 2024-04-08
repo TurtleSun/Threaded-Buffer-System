@@ -1,0 +1,32 @@
+#ifndef BUFFERLIB.H
+#define BUFFERLIB.H
+
+typedef struct {
+    // Used for all bufs
+    char ** data;
+    int in;
+    int out;
+    int size;
+    int isAsync;
+    // Used only for async bufs
+    int latest;
+    int reading;
+    int slots[2];
+} Buffer;
+
+//init
+Buffer initBuffer(int argc, char ** argv);
+
+//writes
+void asyncWrite (Buffer * buffer, char * item);
+void ringWrite (Buffer * buffer, char * item);
+
+//reads
+char * asyncRead (Buffer * buffer);
+char * ringRead (Buffer * buffer);
+
+//wrapper funcs
+char * readBuffer (Buffer * buffer);
+void writeBuffer (Buffer * buffer, char * item);
+
+#endif
