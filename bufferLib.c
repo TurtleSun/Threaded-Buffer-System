@@ -10,10 +10,11 @@
 typedef struct {
     // Used for all bufs
     char ** data;
-    int in;
-    int out;
     int size;
     int isAsync;
+    // Used only for ring bufs
+    int in;
+    int out;
     // Used only for async bufs
     int latest;
     int reading;
@@ -136,7 +137,7 @@ void writeBuffer (Buffer * buffer, char * item) {
     Buffer myBuf = initBuffer(argc, argv);
     writeBuffer(&myBuf, "hello");
     writeBuffer(&myBuf, "World!");
-    writeBuffer(&myBuf, "shit");
     char * result = readBuffer(&myBuf);
+    printf("%s", result);
     return 0;
 }*/
