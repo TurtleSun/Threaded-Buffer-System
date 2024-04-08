@@ -21,48 +21,40 @@ typedef struct {
     int slots[2];
 } Buffer;
 
-Buffer initBuffer(int argc, char ** argv) {
+Buffer initBuffer(const char * type, int size) {
     Buffer buf;
     buf.in = 0;
     buf.out = 0;
-    buf.size = 0;
+    buf.size = size;
     buf.isAsync = 0;
     buf.latest = 0;
     buf.reading = 0;
     buf.slots[0] = 0;
     buf.slots[1] = 0;
 
-    int opt;
-    char type[1024];
-    while ((opt = getopt(argc, argv, "b:s:")) != -1) {
-        switch(opt) {
-            case 'b':
-                strcpy(type, optarg);
-                break;
-            case 's':
-                buf.size = atoi(optarg);
-                break;
-            case '?':
-                fprintf(stderr, "getopt error - missing/bad argument?");
-                exit(1);
-        }
-    }
-
+    // convert type to integer
     if (strcmp(type, "async") == 0) {
+        buf.isAsync = 1;
         buf.size = 4;
-    } else if (strcmp(type, "sync") == 0 && buf.size == 0) {
-        fprintf(stderr, "Invalid size for ring buffer!");
-        exit(1);
-    } else if (strcmp(type, "async") != 0 && strcmp(type, "sync") != 0) {
-        fprintf(stderr, "Invalid type of buffer!");
+    } else if (strcmp(type, "sync") == 0) {
+        buf.isAsync = 0;
+        if (size <= 0) {
+            fprintf(stderr, "Invalid size for ring buffer!\n");
+            exit(1);
+        }
+    } else {
+        fprintf(stderr, "Invalid type of buffer!\n");
         exit(1);
     }
 
-    buf.data = malloc(sizeof(char * ) * buf.size);
-    if (buf.data == NULL) {
-        fprintf(stderr, "malloc error");
-        exit(1);
+    // Allocate data pointers
+    buf.data = (char **)malloc(sizeof(char *) * buf.size);
+    if (!buf.data) {
+        perror("malloc for data pointers failed");
+        exit(EXIT_FAILURE);
     }
+
+    // Allocate each string in the buffer
     for (int i = 0; i < buf.size; i++) {
         buf.data[i] = malloc(100);
         if (buf.data[i] == NULL) {
@@ -70,6 +62,7 @@ Buffer initBuffer(int argc, char ** argv) {
             exit(1);
         }
     }
+
     return buf;
 }
 
