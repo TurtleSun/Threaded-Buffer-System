@@ -19,7 +19,7 @@
             /// should this be buffer_size?
 #define SHMSIZE 100000
 
-int main(){
+int main(int argc, char *argv[]) {
     // open shared memory that we initialized in tapper
     int shm_Id = shmget(KEY, SHMSIZE, 0666);
     if (shm_Id == -1) {
@@ -97,12 +97,12 @@ int main(){
             // Write into the buffer based on its type
             writeBuffer(shmBuffer, bufferData);
         }
-        // once it is done writing data to the buffer, set the reading flag to 1
-        shmBuffer->reading = 1;
-        // write into the buffer, at the very end, the end marker
-        // end of data yeet bc i dont think this will be part of the values we are observing
-        writeBuffer(shmBuffer, "END_OF_DATA_YEET");
     }
+    // once it is done writing data to the buffer, set the reading flag to 1
+    shmBuffer->reading = 1;
+    // write into the buffer, at the very end, the end marker
+    // end of data yeet bc i dont think this will be part of the values we are observing
+    writeBuffer(shmBuffer, "END_OF_DATA_YEET");
 
     // close shared memory
     // detach it

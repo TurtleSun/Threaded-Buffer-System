@@ -21,7 +21,7 @@ typedef struct {
     char value[MAX_PROPERTY_VALUE_LENGTH];
 } Pair;
 
-int main(){
+int main(int argc, char *argv[]) {
     // open shared memory that we initialized in tapper between observe and reconstruct
     int shm_Id_obsrec = shmget(OBSERVE_KEY, SHMSIZE, 0666);
     void * shm_obsrec_addr = shmat(shm_Id_obsrec, NULL, 0);
