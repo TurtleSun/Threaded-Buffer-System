@@ -11,15 +11,40 @@
 #include <sys/shm.h>
 #include <bufferLib.h>
 
+#define MAX_PAIRS 100
+#define MAX_NAME_LEN 50
+#define MAX_VALUE_LEN 50
+#define MAX_LINE_LENGTH 100
+#define MAX_SAMPLE_SIZE 1024
+
 #define OBSERVE_KEY 1234
 #define PLOT_KEY 5678
 #define SHMSIZE 100000
 
-//kv pairs
+// assuming Pair is a structure holding a name and its value
 typedef struct {
-    char name[MAX_PROPERTY_NAME_LENGTH];
-    char value[MAX_PROPERTY_VALUE_LENGTH];
+    char name[MAX_NAME_LEN];
+    char value[MAX_VALUE_LEN];
+    // extra field to count appearances of each pair
 } Pair;
+
+// array to hold the last known values
+//Pair lastKnownValues[MAX_UNIQUE_NAMES];
+//int uniqueNames = 0;
+
+typedef struct {
+    Pair pairs[MAX_UNIQUE_NAMES];
+    // extra field to hold the count of unique names
+    int count;
+    // extra field to hold the end name
+    char endName[100];
+} KnownValues;
+
+// Function declarations
+void parseData(const char* data, Pair* outPair);
+void updateLastKnownValues(Pair* newPair, KnownValues* knownValues);
+void findEndName(KnownValues *values);
+void compileSample(KnownValues* knownValues, char* outSample);
 
 int main(int argc, char *argv[]) {
     // open shared memory that we initialized in tapper between observe and reconstruct
@@ -64,10 +89,12 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // no initialization because i think init is not for shared memory
-    // Initialize the buffer with received type and size
-    // obsrec already initialized in observe
-    //Buffer rectapBuffer = initBuffer(bufferType, bufferSize);
+    // initialize known values struct to hold the last known values
+    KnownValues knownValues = {0};
+    // char array to hold the data
+    char data[MAX_LINE_LEN];
+    // initialize a pair to hold the parsed data
+    Pair parsedData;
 
     ///////////////////// READING FROM OBSERVE
     // read from shared memory between observe and reconstruct and reconstruct the data logic in separate function
@@ -78,31 +105,21 @@ int main(int argc, char *argv[]) {
     }
 
     // reading from the buffer 
+    // process data from obsrecBuffer, data observe wrote
     while (true){
-        char* data = readBuffer(obsrecBuffer);
+        char* dataObs = readBuffer(obsrecBuffer);
         // check for END marker symbolizing no more data to read
-        if (strcmp(data, "END_OF_DATA_YEET") == 0) {
+        if (strcmp(dataObs, "END_OF_DATA_YEET") == 0) {
             break;
         }
-        if (data != NULL) {
-            reconstructData(obsrecBuffer, rectapBuffer);
+        if (dataObs != NULL) {
+            parseData(dataObs, &parsedData);
+            updateLastKnownValues(&parsedData, &knownValues);
+            findEndName(&knownValues);
+            
         }
     }
 
-    ///////////////////// WRITING TO TAPPLOT
-    // write to shared memory between reconstruct and tapplot
-    // fetch reconstructed data and write that into buffer
-            // spaghuetti code for now
-    while (true){
-        char* data = readBuffer(rectapBuffer);
-        // check for END marker symbolizing no more data to read
-        if (strcmp(data, "END_OF_DATA_YEET") == 0) {
-            break;
-        }
-        if (data != NULL) {
-            writeToBuffer(rectapBuffer, data);
-        }
-    }
     // once it is done writing data to the buffer, set the reading flag to 1
     rectapBuffer->reading = 1;
     // write into the buffer, at the very end, the end marker
@@ -118,21 +135,47 @@ int main(int argc, char *argv[]) {
 
 }
 
-void reconstructData(Buffer *obsrecBuffer, Buffer *rectapBuffer) {
-    Entry entry;
-    while (1) {
-        // Simulating a read operation from the buffer
-        entry = readFromBuffer(obsrecBuffer); 
+// parseData function
+// splits a "name=value" string into a Pair struct.
+void parseData(const char* data, Pair* outPair) {
+    // up to 99 characters for name, up to 99 characters for value, and up to 1 character for the '='
+    sscanf(data, "%99[^=]=%99[^\n]", outPair->name, outPair->value);
+}
 
-        if (strcmp(entry.name, "") == 0 && strcmp(entry.value, "") == 0) {
-            // This could be a signal that there's no more data to read, for example
+// updateLastKnownValues function
+// updates or adds to the list of last known values.
+void updateLastKnownValues(Pair* newPair, KnownValues* knownValues) {
+    bool unique = false;
+    // for each known value
+    for (int i = 0; i < knownValues->count; ++i) {
+        // if the new name is found in the list of known values, update the value
+        if (strcmp(knownValues->pairs[i].name, newPair->name) == 0) {
+            strcpy(knownValues->pairs[i].value, newPair->value);
+            knownValues->pairs[i].count++;
+            unique = true;
             break;
         }
-
-        // Logic to reconstruct the data based on the unique names and their latest values
-        // ...
-        // After reconstructing a sample, write it to the buffer for tapplot
-        writeToBuffer(rectapBuffer, &entry);
     }
-}   
+    // if the name is not found in the list of known values, add it
+    if (!unique && knownValues->count < MAX_UNIQUE_NAMES) {
+        strcpy(knownValues->pairs[knownValues->count].name, name);
+        strcpy(knownValues->pairs[knownValues->count].value, value);
+        knownValues->pairs[knownValues->count].count = 1;
+        knownValues->count++;
+    }
+}
+
+// findEndName function
+// checks if the name is the end name
+void findEndName(KnownValues *values) {
+    // go through the values in KnownValues
+    // find the first value whose count is nonzer (repeated)
+    // end value is the name before it
+
+    if (values->count > 0) {
+        strcpy(values->endName, values->pairs[values->count - 1].name);
+    }
+}
+
+// compileSample function
 
