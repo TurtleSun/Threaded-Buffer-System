@@ -116,7 +116,12 @@ int main(int argc, char *argv[]) {
             parseData(dataObs, &parsedData);
             updateLastKnownValues(&parsedData, &knownValues);
             findEndName(&knownValues);
-            
+            // if we have found the end name, compile the sample
+            if (strcmp(parsedData.name, knownValues.endName) == 0) {
+                char sample[MAX_SAMPLE_SIZE];
+                compileSample(&knownValues, sample);
+                // should I HAVE A WHILE LOOP? THIS IS ONLY ONE SAMPLE
+                writeBuffer(rectapBuffer, sample);
         }
     }
 
@@ -178,4 +183,4 @@ void findEndName(KnownValues *values) {
 }
 
 // compileSample function
-
+// compiles the sample from the known values and end name
