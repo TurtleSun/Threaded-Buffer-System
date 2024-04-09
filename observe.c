@@ -62,7 +62,7 @@ int main(){
     }
 
     // Initialize the buffer with received type and size
-    Buffer shmBuffer = initBuffer(bufferType, bufferSize);
+    // Buffer shmBuffer = initBuffer(bufferType, bufferSize);
 
     // read and parse from either a file or stdin
     char line[MAX_LINE_LEN];
@@ -95,8 +95,13 @@ int main(){
             snprintf(bufferData, sizeof(bufferData), "%s=%s", name, value);
             
             // Write into the buffer based on its type
-            writeBuffer(&buffer, bufferData);
+            writeBuffer(shmBuffer, bufferData);
         }
+        // once it is done writing data to the buffer, set the reading flag to 1
+        shmBuffer->reading = 1;
+        // write into the buffer, at the very end, the end marker
+        // end of data yeet bc i dont think this will be part of the values we are observing
+        writeBuffer(shmBuffer, "END_OF_DATA_YEET");
     }
 
     // close shared memory

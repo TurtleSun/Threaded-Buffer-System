@@ -15,6 +15,12 @@
 #define PLOT_KEY 5678
 #define SHMSIZE 100000
 
+//kv pairs
+typedef struct {
+    char name[MAX_PROPERTY_NAME_LENGTH];
+    char value[MAX_PROPERTY_VALUE_LENGTH];
+} Pair;
+
 int main(){
     // open shared memory that we initialized in tapper between observe and reconstruct
     int shm_Id_obsrec = shmget(OBSERVE_KEY, SHMSIZE, 0666);
@@ -58,12 +64,51 @@ int main(){
         }
     }
 
+    // no initialization because i think init is not for shared memory
     // Initialize the buffer with received type and size
-    Buffer obsrecBuffer = initBuffer(bufferType, bufferSize);
-    Buffer rectapBuffer = initBuffer(bufferType, bufferSize);
+    // obsrec already initialized in observe
+    //Buffer rectapBuffer = initBuffer(bufferType, bufferSize);
 
+    ///////////////////// READING FROM OBSERVE
     // read from shared memory between observe and reconstruct and reconstruct the data logic in separate function
-    reconstructData(obsrecBuffer, rectapBuffer);
+    // while reading flag is 0 then the data is not ready to read
+    while (!obsrecBuffer->reading) {
+        // sleep briefly
+        usleep(1000);
+    }
+
+    // reading from the buffer 
+    while (true){
+        char* data = readBuffer(obsrecBuffer);
+        // check for END marker symbolizing no more data to read
+        if (strcmp(data, "END") == 0) {
+            break;
+        }
+        if (data != NULL) {
+            reconstructData(obsrecBuffer, rectapBuffer);
+        }
+    }
+
+    ///////////////////// WRITING TO TAPPLOT
+    // write to shared memory between reconstruct and tapplot
+    // fetch reconstructed data and write that into buffer
+            // spaghuetti code for now
+    while (true){
+        char* data = readBuffer(rectapBuffer);
+        // check for END marker symbolizing no more data to read
+        if (strcmp(data, "END") == 0) {
+            break;
+        }
+        if (data != NULL) {
+            writeToBuffer(rectapBuffer, data);
+        }
+    }
+    // once it is done writing data to the buffer, set the reading flag to 1
+    rectapBuffer->reading = 1;
+    // write into the buffer, at the very end, the end marker
+    // end of data yeet bc i dont think this will be part of the values we are observing
+    writeBuffer(rectapBuffer, "END_OF_DATA_YEET");
+
 
     // Detach from shared memory segments
     shmdt(shm_obsrec_addr);

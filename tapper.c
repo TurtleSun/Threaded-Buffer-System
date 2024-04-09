@@ -40,6 +40,9 @@ int main(int argc, char *argv[]){
         shmAddr[i] = shmat(shmIDs[i], NULL, 0);
     }
 
+    // default arg number for tapplot
+    char argnValue[10] = "1";
+
     // execute process
     // observe, reconstruct, tapplot
     // fork and exec
@@ -49,17 +52,22 @@ int main(int argc, char *argv[]){
             perror("fork");
             exit(1);
         } else if (cpid == 0) { // Child process
-            char *program;
+            char *program, *args[7];
             if (i == 0) { // First process (observe)
             // pass in buffer size and type for when initializing buffer in children
             program = "./observe";
+            args[0] = program; args[1] = "-b"; args[2] = bufferInfo.isAsync; 
+            args[3] = "-s"; args[4] = bufferInfo.bufferSize; args[5] = NULL;
             } else if (i == num_processes - 1) { // Last process (tapplot)
             program = "./tapplot";
+            args[0] = program; args[1] = "-b"; args[2] = bufferInfo.isAsync;
+            args[3] = "-s"; args[4] = bufferInfo.bufferSize; args[5] = "-n"; args[6] = argnValue; args[7] = NULL;
             } else { // Middle process (reconstruct)
             program = "./reconstruct";
+            args[0] = program; args[1] = "-b"; args[2] = bufferInfo.isAsync; 
+            args[3] = "-s"; args[4] = bufferInfo.bufferSize; args[5] = NULL;
             }
             // arguments for buffer for children passed through execvp
-            char *args[] = {program, "-b", bufferInfo.isAsync, "-s", bufferInfo.bufferSize, NULL};
             execvp(program, args);
             perror("execvp failure");
             exit(1);
