@@ -81,7 +81,7 @@ int main(){
     while (true){
         char* data = readBuffer(obsrecBuffer);
         // check for END marker symbolizing no more data to read
-        if (strcmp(data, "END") == 0) {
+        if (strcmp(data, "END_OF_DATA_YEET") == 0) {
             break;
         }
         if (data != NULL) {
@@ -96,7 +96,7 @@ int main(){
     while (true){
         char* data = readBuffer(rectapBuffer);
         // check for END marker symbolizing no more data to read
-        if (strcmp(data, "END") == 0) {
+        if (strcmp(data, "END_OF_DATA_YEET") == 0) {
             break;
         }
         if (data != NULL) {

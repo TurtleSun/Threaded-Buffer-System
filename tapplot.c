@@ -58,19 +58,18 @@ int main(int argc, char *argv[]) {
             // sleep briefly
             usleep(1000);
         }
-        // Simulating a read operation from the buffer
-        while (shmBuffer->head != shmBuffer->tail) {
-            Entry entry = readFromBuffer(shmBuffer);
-            printf("Name: %s, Value: %s\n", entry.name, entry.value);
+        
+        // reading from the buffer
+        // reading from the buffer 
+        while (true){
+            char* data = readBuffer(obsrecBuffer);
+            // check for END marker symbolizing no more data to read
+            if (strcmp(data, "END_OF_DATA_YEET") == 0) {
+                break;
+            }
+            if (data != NULL) {
+                processAndPlotData(data);            }
         }
-
-        char *data = readBuffer(shmBuffer);
-        if (data != NULL) {
-            processAndPlotData(data);
-        }
-
-        // set reading flag to 0
-        shmBuffer->reading = 0;
     }
 
     // close shared memory
