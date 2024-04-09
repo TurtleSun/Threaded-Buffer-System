@@ -62,7 +62,7 @@ int main(){
     }
 
     // Initialize the buffer with received type and size
-    Buffer buffer = initBuffer(bufferType, bufferSize);
+    Buffer shmBuffer = initBuffer(bufferType, bufferSize);
 
     // read and parse from either a file or stdin
     char line[MAX_LINE_LEN];

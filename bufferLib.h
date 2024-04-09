@@ -4,10 +4,11 @@
 typedef struct {
     // Used for all bufs
     char ** data;
-    int in;
-    int out;
     int size;
     int isAsync;
+    // Used only for ring bufs
+    int in;
+    int out;
     // Used only for async bufs
     int latest;
     int reading;

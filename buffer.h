@@ -1,3 +1,6 @@
+// old unfinished version
+// bufferLib.h from Jake better approach (one struct)
+
 #ifndef BUFFER.H
 #define BUFFER.H
 
@@ -8,7 +11,9 @@ typedef struct {
     int head;
     int tail;
     int count;
-} ring_buffer;
+    // flag to indicate if all has been produces, ready to read
+    int ready;
+} RingBuffer;
 
 // struct to represent 4-slot buffer
 typedef struct {
@@ -16,7 +21,7 @@ typedef struct {
     int head;
     int tail;
     int count;
-} slot_buffer;
+} SlotBuffer;
 
 #endif // BUFFER.H
 

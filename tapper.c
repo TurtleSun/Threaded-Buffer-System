@@ -49,7 +49,7 @@ int main(int argc, char *argv[]){
             perror("fork");
             exit(1);
         } else if (cpid == 0) { // Child process
-        char *program;
+            char *program;
             if (i == 0) { // First process (observe)
             // pass in buffer size and type for when initializing buffer in children
             program = "./observe";
