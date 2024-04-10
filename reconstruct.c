@@ -43,6 +43,7 @@ typedef struct {
 // Function declarations
 void parseData(const char* data, Pair* outPair);
 void updateLastKnownValues(Pair* newPair, KnownValues* knownValues);
+void shouldCompileSample(Pair* newPair, KnownValues* knownValues);
 void findEndName(KnownValues *values);
 void compileSample(KnownValues* knownValues, char* outSample);
 
@@ -117,11 +118,15 @@ int main(int argc, char *argv[]) {
             updateLastKnownValues(&parsedData, &knownValues);
             findEndName(&knownValues);
             // if we have found the end name, compile the sample
-            if (strcmp(parsedData.name, knownValues.endName) == 0) {
+            if shouldCompileSample((&parsedData, &knownValues)) { 
                 char sample[MAX_SAMPLE_SIZE];
-                compileSample(&knownValues, sample);
-                // should I HAVE A WHILE LOOP? THIS IS ONLY ONE SAMPLE
-                writeBuffer(rectapBuffer, sample);
+                compileSample(&knownValues, sample); // Compile current known values into a sample
+                writeBuffer(rectapBuffer, sample); // Write compiled sample to reconstruct-tapplot buffer
+
+                // Optionally reset flags/counters for the next sample, if necessary
+                // resetForNextSample(&knownValues);
+        }
+            
         }
     }
 
@@ -172,14 +177,15 @@ void updateLastKnownValues(Pair* newPair, KnownValues* knownValues) {
 
 // findEndName function
 // checks if the name is the end name
+// this way we can check when a sample is "completed" to be compiled
 void findEndName(KnownValues *values) {
     // go through the values in KnownValues
     // find the first value whose count is nonzer (repeated)
     // end value is the name before it
-
     if (values->count > 0) {
         strcpy(values->endName, values->pairs[values->count - 1].name);
     }
+    
 }
 
 // compileSample function
