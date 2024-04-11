@@ -218,9 +218,6 @@ void *reconstruct_function(void *arg){
     // initialize a pair to hold the parsed data
     Pair parsedData;
 
-    ///////////////////// READING FROM OBSERVE
-    // read from shared memory between observe and reconstruct and reconstruct the data logic in separate function
-    // while reading flag is 0 then the data is not ready to read
     while (!buffer->reading) {
         // sleep briefly
         usleep(1000);
