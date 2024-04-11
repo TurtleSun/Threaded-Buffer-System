@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
     ///////////////////// READING FROM OBSERVE
     // read from shared memory between observe and reconstruct and reconstruct the data logic in separate function
     // while reading flag is 0 then the data is not ready to read
-    while (!obsrecBuffer->reading) {
+    while (obsrecBuffer->isAsync == 1 && !obsrecBuffer->reading) {
         // sleep briefly
         usleep(1000);
     }
@@ -141,10 +141,10 @@ int main(int argc, char *argv[]) {
             findEndName(&knownValues);
             // if we have found the end name, compile the sample
             if (strcmp(parsedData.name, knownValues.endName) == 0) {
-                char sample[MAX_TASK_SIZE];
+                char sample[100];
                 compileSample(&knownValues, sample);
                 printf("There is the sample: %s\n", sample);  
-                writeBuffer(buffer, sample);
+                writeBuffer(rectapBuffer, sample);
             }
         }
     }
