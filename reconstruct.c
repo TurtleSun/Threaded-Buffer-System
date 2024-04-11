@@ -140,20 +140,12 @@ int main(int argc, char *argv[]) {
             updateLastKnownValues(&parsedData, &knownValues);
             findEndName(&knownValues);
             // if we have found the end name, compile the sample
-            // if end name is found in the data, compile the sample
             if (strcmp(parsedData.name, knownValues.endName) == 0) {
-                // add current state as a sample
-                addSample(&samples, &knownValues);
+                char sample[MAX_TASK_SIZE];
+                compileSample(&knownValues, sample);
+                printf("There is the sample: %s\n", sample);  
+                writeBuffer(buffer, sample);
             }
-            if (shouldCompileSample(&parsedData, &knownValues) == 1) { 
-                char sample[MAX_SAMPLE_SIZE];
-                compileSample(&knownValues, sample); // Compile current known values into a sample
-                writeBuffer(rectapBuffer, sample); // Write compiled sample to reconstruct-tapplot buffer
-
-                // Optionally reset flags/counters for the next sample, if necessary
-                // resetForNextSample(&knownValues);
-        }
-            
         }
     }
 
@@ -180,21 +172,22 @@ void parseData(const char* data, Pair* outPair) {
 // updateLastKnownValues function
 // updates or adds to the list of last known values.
 void updateLastKnownValues(Pair* newPair, KnownValues* knownValues) {
-    bool unique = false;
+    int unique = 0;
     // for each known value
     for (int i = 0; i < knownValues->count; ++i) {
         // if the new name is found in the list of known values, update the value
         if (strcmp(knownValues->pairs[i].name, newPair->name) == 0) {
             strcpy(knownValues->pairs[i].value, newPair->value);
             knownValues->pairs[i].count++;
-            unique = true;
+            unique = 1;
             break;
         }
     }
     // if the name is not found in the list of known values, add it
-    if (!unique && knownValues->count < MAX_UNIQUE_NAMES) {
-        strcpy(knownValues->pairs[knownValues->count].name, newPair->name);
-        strcpy(knownValues->pairs[knownValues->count].value, newPair->value);
+    if (!unique && knownValues->count < MAX_PAIRS) {
+        Pair selectedPair = knownValues->pairs[knownValues->count];
+        strcpy(selectedPair.name, newPair->name);
+        strcpy(selectedPair.value, newPair->value);
         knownValues->pairs[knownValues->count].count = 1;
         knownValues->count++;
     }
@@ -255,14 +248,20 @@ bool shouldCompileSample(Pair* newPair, KnownValues* knownValues) {
 
 // compileSample function
 // compiles the sample from the known values and end name
-void compileSample(KnownValues* knownValues, char* outSample) {
-    outSample[0] = '\0'; // Start with an empty string
-    for (int i = 0; i < knownValues->count; ++i) {
-        strcat(outSample, knownValues->pairs[i].name);
-        strcat(outSample, "=");
-        strcat(outSample, knownValues->pairs[i].value);
-        if (i < knownValues->count - 1) {
-            strcat(outSample, ", ");
+void compileSample(KnownValues *values, char sample[]) {
+    // Initialize the sample string
+    sample[0] = '\0'; // Ensure the string is empty initially
+
+    // Iterate over the known values and concatenate them into the sample string
+    for (int i = 0; i < values->count; ++i) {
+        // Concatenate the name-value pair to the sample string
+        strcat(sample, values->pairs[i].name);
+        strcat(sample, "=");
+        strcat(sample, values->pairs[i].value);
+
+        // Add a comma if it's not the last pair
+        if (i < values->count - 1) {
+            strcat(sample, ", ");
         }
     }
 }

@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
    // get argn from argv array passed in
     int argn = atoi(argv[6]);
     // print so i can make sure it is arg[6]
-    printf("argn: %d\n", argn);
+    //printf("argn: %d\n", argn);
 
     if (argn < 1 || argn > MAX_NAMES) {
         fprintf(stderr, "Field index %d is out of range\n", argn);
@@ -42,8 +42,6 @@ int main(int argc, char *argv[]) {
     }
 
     Buffer *shmBuffer = (Buffer *)shm_rectap_addr;
-
-    // 
 
     // Open a pipe to gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
@@ -100,15 +98,55 @@ int main(int argc, char *argv[]) {
 }
 
 // processAndPlotData function
-void processAndPlotData(char* data, FILE* gnuplotPipe, int argn, int sampleNumber) {
-    // take data that is in sample format and take only argn field for plot
-    char* token = strtok(data, ",");
-    // loop through data until we get to the field we want which is argn and then plot its value with the sample number
-    // go through token until we get to index argn
-    // then set Plotname to the name for that pair, as it is the arg we want to plot
-    // plot that value with the sample number
-    // plot the value of the field we want with the sample number
-    fprintf(gnuplotPipe, "%d %s\n", sampleNumber,token); // value of the field we want); 
+void processAndPlotData(char * data){
+    // Parse the data into name and value
+    Pair pair;
+    parseData(data, &pair);
+
+    // Extract the relevant value for plotting based on the argument argn
+    int argn = 1; // To be changed in main
+    // Example: argn = atoi(argv[1]);
+
+    // Here, we assume that argn is the index of the value to be plotted
+    char *value = pair.value; // Default value to be plotted
+    printf("This is data to be plotted %s\n", value);
+    // You might need to update this value based on the value at index argn in the pair
+
+    // Open a file to write the data
+    FILE *dataFile = fopen("plot_data.txt", "a");
+    if (dataFile == NULL) {
+        fprintf(stderr, "Error opening file for writing");
+        exit(EXIT_FAILURE);
+    }
+
+    // Write the value to the file
+    fprintf(dataFile, "%s\n", value);
+
+    // Close the file
+    fclose(dataFile);
+
+    gnuplot();
+}
+
+void gnuplot() {
+    // Open a pipe to Gnuplot
+    FILE *gnuplotPipe = popen("gnuplot", "w");
+    if (!gnuplotPipe) {
+        fprintf(stderr, "Error opening pipe to Gnuplot");
+        pthread_exit(NULL);
+    }
+
+    // Gnuplot script
+    fprintf(gnuplotPipe, "set terminal png\n");
+    fprintf(gnuplotPipe, "set output 'plot.png'\n");
+    fprintf(gnuplotPipe, "set xlabel 'Sample Number'\n");
+    fprintf(gnuplotPipe, "set ylabel 'Value'\n");
+    fprintf(gnuplotPipe, "set title 'Plot Title'\n");
+    fprintf(gnuplotPipe, "plot 'plot_data.txt' with lines\n");
+    fprintf(gnuplotPipe, "exit\n");
+
+    // Close the pipe
+    pclose(gnuplotPipe);
 }
 
 

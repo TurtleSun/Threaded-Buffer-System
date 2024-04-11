@@ -22,6 +22,7 @@
 int main(int argc, char *argv[]) {
     // open shared memory that we initialized in tapper
     int shm_Id = shmget(KEY, SHMSIZE, 0666);
+    printf("shm_Id: %d\n", shm_Id);
     if (shm_Id == -1) {
     // something went horribly wrong        
     perror("shmget error");
@@ -29,6 +30,7 @@ int main(int argc, char *argv[]) {
     }
 
     void * shm_addr = shmat(shm_Id, NULL, 0);
+    printf("shm_addr: %p\n", shm_addr);
     if (shm_addr == NULL) {
         // something still went horribly wrong
         perror("malloc error");
@@ -37,6 +39,7 @@ int main(int argc, char *argv[]) {
 
     // cast shared memory to a buffer
     Buffer *shmBuffer = (Buffer *)shm_addr;
+    printf("shmBuffer: %p\n", shmBuffer);
 
     // intialize buffer
     // depending on the buffer type, we need to initialize the buffer differently
@@ -51,9 +54,11 @@ int main(int argc, char *argv[]) {
         switch (opt) {
             case 'b':
                 bufferType = optarg;
+                printf("bufferType: %s\n", bufferType);
                 break;
             case 's':
                 bufferSize = atoi(optarg);
+                printf("bufferSize: %d\n", bufferSize);
                 break;
             default:
                 fprintf(stderr, "Usage: %s [-b bufferType] [-s bufferSize]\n", argv[0]);
@@ -83,8 +88,12 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
+        // print line
+        printf("name: %s, value: %s\n", name, value);
+
         // compare current value with last value, if they are different write value in shared memory
         if(strcmp(lastValue, value) != 0) {
+            printf("Value changed: %s\n", value);
             strcpy(lastValue, value);
             // Write to shared memory
             //TODO: Change shm_addr here to an attribute (slot) of a structure that we cast shm_addr to.
@@ -94,8 +103,12 @@ int main(int argc, char *argv[]) {
             char bufferData[MAX_LINE_LEN];
             snprintf(bufferData, sizeof(bufferData), "%s=%s", name, value);
             
+            printf("bufferData: %s\n", bufferData);
             // Write into the buffer based on its type
             writeBuffer(shmBuffer, bufferData);
+            printf("Wrote to buffer\n");
+            // print whats inside
+            printf("shmBuffer: %s\n", shmBuffer->data[0]);
         }
     }
     // once it is done writing data to the buffer, set the reading flag to 1
