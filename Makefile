@@ -11,3 +11,15 @@ myshell: $(OBJS)
 
 clean:
 	rm -rf $(PROGS) *.o
+
+tapper:
+	gcc -g tapper.c -o tapper 
+
+observe:
+	gcc -o observe observe.c bufferLib.c
+
+reconstruct:
+	gcc -o reconstruct reconstruct.c bufferLib.c
+
+tapplot:
+	gcc -o tapplot tapplot.c bufferLib.c

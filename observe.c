@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <sys/shm.h>
 #include <unistd.h>
-#include <bufferLib.h>
+#include "bufferLib.h"
 
 //  reads input either from a file or stdin. The input data will be a series of strings, each terminated by a newline either until the end-of-file input or the user types ctrl-d to end the standard input stream. NOTE that ctrl-d (ctrl  and the 'd' key together) sends an EOF signal to the foreground process, so as long as tapper is running, it will not terminate your shell program. 
 // Each string input to P1 will be of the form:

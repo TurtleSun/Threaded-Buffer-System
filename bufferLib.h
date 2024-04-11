@@ -1,5 +1,5 @@
-#ifndef BUFFERLIB.H
-#define BUFFERLIB.H
+#ifndef BUFFERLIB
+#define BUFFERLIB .H
 
 typedef struct {
     // Used for all bufs

@@ -9,23 +9,28 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/shm.h>
-#include <bufferLib.h>
+#include "bufferLib.h"
+#include <unistd.h>
+#include <stdbool.h>
 
 #define MAX_PAIRS 100
 #define MAX_NAME_LEN 50
 #define MAX_VALUE_LEN 50
 #define MAX_LINE_LENGTH 100
 #define MAX_SAMPLE_SIZE 1024
+#define MAX_UNIQUE_NAMES 50
 
 #define OBSERVE_KEY 1234
 #define PLOT_KEY 5678
 #define SHMSIZE 100000
 
-// assuming Pair is a structure holding a name and its value
+#define MAX_SAMPLES 100 // Maximum number of samples
+
 typedef struct {
     char name[MAX_NAME_LEN];
     char value[MAX_VALUE_LEN];
     // extra field to count appearances of each pair
+    int count;
 } Pair;
 
 // array to hold the last known values
@@ -40,12 +45,27 @@ typedef struct {
     char endName[100];
 } KnownValues;
 
+typedef struct {
+    // holds pairs for a single sample
+    Pair pairs[MAX_UNIQUE_NAMES];
+    // number of pairs in this sample
+    int pairCount;
+} Sample;
+
+typedef struct {
+    // array to hold samples
+    Sample samples[MAX_SAMPLES];
+    // current number of samples
+    int sampleCount;
+} Samples;
+
 // Function declarations
 void parseData(const char* data, Pair* outPair);
 void updateLastKnownValues(Pair* newPair, KnownValues* knownValues);
-void shouldCompileSample(Pair* newPair, KnownValues* knownValues);
+bool shouldCompileSample(Pair* newPair, KnownValues* knownValues);
 void findEndName(KnownValues *values);
 void compileSample(KnownValues* knownValues, char* outSample);
+void addSample(Samples* samples, KnownValues* knownValues);
 
 int main(int argc, char *argv[]) {
     // open shared memory that we initialized in tapper between observe and reconstruct
@@ -56,7 +76,7 @@ int main(int argc, char *argv[]) {
     int shm_Id_rectap = shmget(PLOT_KEY, SHMSIZE, 0666);
     void * shm_rectap_addr = shmat(shm_Id_rectap, NULL, 0);
 
-    if (shm_Id_obsrec == NULL || shm_Id_rectap == NULL) {
+    if (shm_Id_obsrec == -1 || shm_Id_rectap == -1) {
         // something went horribly wrong
         perror("shmatt error");
         exit(1);
@@ -93,7 +113,7 @@ int main(int argc, char *argv[]) {
     // initialize known values struct to hold the last known values
     KnownValues knownValues = {0};
     // char array to hold the data
-    char data[MAX_LINE_LEN];
+    char data[MAX_LINE_LENGTH];
     // initialize a pair to hold the parsed data
     Pair parsedData;
 
@@ -104,6 +124,8 @@ int main(int argc, char *argv[]) {
         // sleep briefly
         usleep(1000);
     }
+
+    Samples samples = {0};
 
     // reading from the buffer 
     // process data from obsrecBuffer, data observe wrote
@@ -118,7 +140,12 @@ int main(int argc, char *argv[]) {
             updateLastKnownValues(&parsedData, &knownValues);
             findEndName(&knownValues);
             // if we have found the end name, compile the sample
-            if shouldCompileSample((&parsedData, &knownValues)) { 
+            // if end name is found in the data, compile the sample
+            if (strcmp(parsedData.name, knownValues.endName) == 0) {
+                // add current state as a sample
+                addSample(&samples, &knownValues);
+            }
+            if (shouldCompileSample(&parsedData, &knownValues) == 1) { 
                 char sample[MAX_SAMPLE_SIZE];
                 compileSample(&knownValues, sample); // Compile current known values into a sample
                 writeBuffer(rectapBuffer, sample); // Write compiled sample to reconstruct-tapplot buffer
@@ -136,13 +163,11 @@ int main(int argc, char *argv[]) {
     // end of data yeet bc i dont think this will be part of the values we are observing
     writeBuffer(rectapBuffer, "END_OF_DATA_YEET");
 
-
     // Detach from shared memory segments
     shmdt(shm_obsrec_addr);
     shmdt(shm_rectap_addr);
 
     return 0;
-
 }
 
 // parseData function
@@ -168,8 +193,8 @@ void updateLastKnownValues(Pair* newPair, KnownValues* knownValues) {
     }
     // if the name is not found in the list of known values, add it
     if (!unique && knownValues->count < MAX_UNIQUE_NAMES) {
-        strcpy(knownValues->pairs[knownValues->count].name, name);
-        strcpy(knownValues->pairs[knownValues->count].value, value);
+        strcpy(knownValues->pairs[knownValues->count].name, newPair->name);
+        strcpy(knownValues->pairs[knownValues->count].value, newPair->value);
         knownValues->pairs[knownValues->count].count = 1;
         knownValues->count++;
     }
@@ -185,8 +210,59 @@ void findEndName(KnownValues *values) {
     if (values->count > 0) {
         strcpy(values->endName, values->pairs[values->count - 1].name);
     }
-    
+
+}
+
+// isEndName function
+// checks if the name is the end name
+bool isEndName(const char* name, KnownValues *values) {
+    return strcmp(name, values->endName) == 0;
 }
 
 // compileSample function
 // compiles the sample from the known values and end name
+
+
+// addSample function
+// adds a sample to the samples struct
+void addSample(Samples* samples, KnownValues* knownValues) {
+    if (samples->sampleCount >= MAX_SAMPLES) {
+        // No more space for samples
+        return;
+    }
+    
+    Sample* newSample = &samples->samples[samples->sampleCount++];
+    // initialize the pair count for the new sample
+    newSample->pairCount = 0;
+    
+    // Copy data from knownValues to the newSample
+    for (int i = 0; i < knownValues->count; i++) {
+        strcpy(newSample->pairs[i].name, knownValues->pairs[i].name);
+        strcpy(newSample->pairs[i].value, knownValues->pairs[i].value);
+        newSample->pairCount++;
+    }
+}
+
+// shouldCompileSample function
+// checks if the sample should be compiled
+bool shouldCompileSample(Pair* newPair, KnownValues* knownValues) {
+    // if the new pair is the end name, compile the sample
+    if (isEndName(newPair->name, knownValues)) {
+        return 1;
+    }
+    return 0;
+}
+
+// compileSample function
+// compiles the sample from the known values and end name
+void compileSample(KnownValues* knownValues, char* outSample) {
+    outSample[0] = '\0'; // Start with an empty string
+    for (int i = 0; i < knownValues->count; ++i) {
+        strcat(outSample, knownValues->pairs[i].name);
+        strcat(outSample, "=");
+        strcat(outSample, knownValues->pairs[i].value);
+        if (i < knownValues->count - 1) {
+            strcat(outSample, ", ");
+        }
+    }
+}
