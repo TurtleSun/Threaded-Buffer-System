@@ -21,23 +21,22 @@ typedef struct {
     int slots[2];
 } Buffer;
 
-Buffer initBuffer(const char * type, int size) {
-    Buffer buf;
-    buf.in = 0;
-    buf.out = 0;
-    buf.size = size;
-    buf.isAsync = 0;
-    buf.latest = 0;
-    buf.reading = 0;
-    buf.slots[0] = 0;
-    buf.slots[1] = 0;
+/*void initBuffer(Buffer * buf, const char * type, int size) {
+    buf->in = 0;
+    buf->out = 0;
+    buf->size = size;
+    buf->isAsync = 0;
+    buf->latest = 0;
+    buf->reading = 0;
+    buf->slots[0] = 0;
+    buf->slots[1] = 0;
 
     // convert type to integer
     if (strcmp(type, "async") == 0) {
-        buf.isAsync = 1;
-        buf.size = 4;
+        buf->isAsync = 1;
+        buf->size = 4;
     } else if (strcmp(type, "sync") == 0) {
-        buf.isAsync = 0;
+        buf->isAsync = 0;
         if (size <= 0) {
             fprintf(stderr, "Invalid size for ring buffer!\n");
             exit(1);
@@ -47,24 +46,14 @@ Buffer initBuffer(const char * type, int size) {
         exit(1);
     }
 
-    // Allocate data pointers
-    buf.data = (char **)malloc(sizeof(char *) * buf.size);
-    if (!buf.data) {
-        perror("malloc for data pointers failed");
-        exit(EXIT_FAILURE);
-    }
+    // Allocate data pointers in shared memory
+    buf->data = (char**)(buf + 1);  // The data array starts immediately after the Buffer struct
 
     // Allocate each string in the buffer
-    for (int i = 0; i < buf.size; i++) {
-        buf.data[i] = malloc(100);
-        if (buf.data[i] == NULL) {
-            fprintf(stderr, "malloc error");
-            exit(1);
-        }
+    for (int i = 0; i < buf->size; i++) {
+        buf->data[i] = (char *)(buf->data + buf->size) + i * 100;  // Each string is 100 bytes
     }
-
-    return buf;
-}
+}*/
 
 void asyncWrite (Buffer * buffer, char * item) {
   int pair, index;

@@ -1,4 +1,4 @@
-PROGS=myshell
+PROGS=myshell tapper observe reconstruct tapplot
 OBJS=myshell.o
 
 all: $(PROGS)
@@ -16,10 +16,10 @@ tapper:
 	gcc -g tapper.c -o tapper 
 
 observe:
-	gcc -o observe observe.c bufferLib.c
+	gcc -g -o observe observe.c bufferLib.c
 
 reconstruct:
-	gcc -o reconstruct reconstruct.c bufferLib.c
+	gcc -g -o reconstruct reconstruct.c bufferLib.c
 
 tapplot:
-	gcc -o tapplot tapplot.c bufferLib.c
+	gcc -g -o tapplot tapplot.c bufferLib.c

@@ -16,7 +16,7 @@ typedef struct {
 } Buffer;
 
 //init
-Buffer initBuffer(int argc, char ** argv);
+//void initBuffer(Buffer * buf, int argc, char ** argv);
 
 //writes
 void asyncWrite (Buffer * buffer, char * item);

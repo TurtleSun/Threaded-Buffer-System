@@ -19,6 +19,40 @@
             /// should this be buffer_size?
 #define SHMSIZE 100000
 
+void initBuffer(Buffer * buf, const char * type, int size) {
+    buf->in = 0;
+    buf->out = 0;
+    buf->size = size;
+    buf->isAsync = 0;
+    buf->latest = 0;
+    buf->reading = 0;
+    buf->slots[0] = 0;
+    buf->slots[1] = 0;
+
+    // convert type to integer
+    if (strcmp(type, "async") == 0) {
+        buf->isAsync = 1;
+        buf->size = 4;
+    } else if (strcmp(type, "sync") == 0) {
+        buf->isAsync = 0;
+        if (size <= 0) {
+            fprintf(stderr, "Invalid size for ring buffer!\n");
+            exit(1);
+        }
+    } else {
+        fprintf(stderr, "Invalid type of buffer!\n");
+        exit(1);
+    }
+
+    // Allocate data pointers in shared memory
+    buf->data = (char**)(buf + 1);  // The data array starts immediately after the Buffer struct
+
+    // Allocate each string in the buffer
+    for (int i = 0; i < buf->size; i++) {
+        buf->data[i] = (char *)(buf->data + buf->size) + i * 100;  // Each string is 100 bytes
+    }
+}
+
 int main(int argc, char *argv[]) {
     // open shared memory that we initialized in tapper
     int shm_Id = shmget(KEY, SHMSIZE, 0666);
@@ -67,7 +101,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Initialize the buffer with received type and size
-    // Buffer shmBuffer = initBuffer(bufferType, bufferSize);
+    initBuffer(shmBuffer, bufferType, bufferSize);
 
     // read and parse from either a file or stdin
     char line[MAX_LINE_LEN];
