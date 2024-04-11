@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/shm.h>
 #include <stdbool.h>
+#include "bufferLib.h"
 
 #define SHMSIZE 100000
 
@@ -19,7 +20,7 @@ key_t keys[2];
 
 // struct to hold buffer configuration
 typedef struct {
-    char isAsync[6];
+    char isAsync[10];
     char bufferSize[10];
 } BufferConfig;
 
@@ -40,6 +41,9 @@ int main(int argc, char *argv[]){
         shmAddr[i] = shmat(shmIDs[i], NULL, 0);
     }
 
+    printf("shmIDs[0]: %d\n", shmIDs[0]);
+    printf("shmIDs[1]: %d\n", shmIDs[1]);
+
     // default arg number for tapplot
     char argnValue[10] = "1";
 
@@ -52,7 +56,7 @@ int main(int argc, char *argv[]){
             perror("fork");
             exit(1);
         } else if (cpid == 0) { // Child process
-            char *program, *args[7];
+            char *program, *args[8];
             if (i == 0) { // First process (observe)
             // pass in buffer size and type for when initializing buffer in children
             program = "./observe";
@@ -77,32 +81,46 @@ int main(int argc, char *argv[]){
     // wait for all children to finish
     while (wait(NULL) > 0);
 
+    // detach and remove shared memory
+    for (int i = 0; i < num_processes - 1; i++) {
+        shmdt(shmAddr[i]);
+        shmctl(shmIDs[i], IPC_RMID, NULL);
+    }
+
+
     // exit
     return 0;
 }
 
 void parse_args(int argc, char *argv[]){
-    if (argc != 2){
-        printf("Please specify an input file!\n");
-        exit(1);
-    }
+    //if (argc != 2){
+      //  printf("Please specify an input file!\n");
+        //exit(1);
+    //}
 
     // flags for buffer type and size if they are set
     bool bufferTypeSet = false, bufferSizeSet = false;
+    
+    // set argn value for tapplot
+    char argnValue[10] = "1";
 
     // parse command line arguments
     for (int i = 1; i < argc; i++) {
         // check for buffer type and size
         if (strcmp(argv[i], "-b") == 0 && i + 1 < argc) {
             // set buffer type
-            strncpy(bufferConfig.bufferType, argv[i + 1], sizeof(bufferConfig.bufferType) - 1);
+            strncpy(bufferInfo.isAsync, argv[i + 1], sizeof(bufferInfo.isAsync) - 1);
             bufferTypeSet = true;
             i++; // Skip the value of "-b"
         } else if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
             // set buffer size
-            strncpy(bufferConfig.bufferSize, argv[i + 1], sizeof(bufferConfig.bufferSize) - 1);
+            strncpy(bufferInfo.bufferSize, argv[i + 1], sizeof(bufferInfo.bufferSize) - 1);
             bufferSizeSet = true;
             i++; // Skip the value of "-s"
+        // set argn value for tapplot
+        } else if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) {
+            strncpy(argnValue, argv[i + 1], sizeof(argnValue) - 1);
+            i++; // Skip the value of "-n"
         } else {
             fprintf(stderr, "Invalid argument: %s\n", argv[i]);
             exit(1);
@@ -113,8 +131,4 @@ void parse_args(int argc, char *argv[]){
         fprintf(stderr, "Both -b (buffer type) and -s (buffer size) must be specified.\n");
         exit(1);
     }
-
-    // Debugging output
-    printf("Buffering mode: %s\n", bufferConfig.bufferType);
-    printf("Buffer size: %s\n", bufferConfig.bufferSize);
 }
