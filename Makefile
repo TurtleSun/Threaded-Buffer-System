@@ -23,3 +23,7 @@ reconstruct:
 
 tapplot:
 	gcc -g -o tapplot tapplot.c bufferLib.c
+
+tappet:
+	gcc -g tappet.c observe_thread.c reconstruct_thread.c bufferLib_thread.c -o tappet 
+
