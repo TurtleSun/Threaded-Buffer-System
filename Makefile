@@ -1,4 +1,4 @@
-PROGS=myshell tapper observe reconstruct
+PROGS=myshell tapper observe reconstruct tapplot
 OBJS=myshell.o
 
 all: $(PROGS)

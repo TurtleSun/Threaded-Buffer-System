@@ -17,7 +17,7 @@
 #define MAX_LINE_LEN 200
 #define KEY 1234
             /// should this be buffer_size?
-#define SHMSIZE 100000
+#define SHMSIZE 1000000
 
 struct Pair {
     char * name;
