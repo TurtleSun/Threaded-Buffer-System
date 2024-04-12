@@ -12,6 +12,8 @@
 #include "bufferLib.h"
 #include <unistd.h>
 #include <stdbool.h>
+#include <fcntl.h>
+#include <semaphore.h>
 
 #define MAX_PAIRS 100
 #define MAX_NAME_LEN 50
@@ -22,7 +24,7 @@
 
 #define OBSERVE_KEY 1234
 #define PLOT_KEY 5678
-#define SHMSIZE 1000000
+#define SHMSIZE 100000
 
 #define MAX_SAMPLES 100 // Maximum number of samples
 
@@ -50,7 +52,6 @@ void parseData(const char* data, Pair* outPair);
 void updateLastKnownValues(Pair* newPair, KnownValues* knownValues);
 void findEndName(KnownValues *values);
 void compileSample(KnownValues* knownValues, char* outSample);
-void initBuffer(Buffer * buf, const char * type, int size);
 int nameInKnownVals(KnownValues *values, char * name);
 
 int main(int argc, char *argv[]) {
@@ -96,7 +97,8 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    initBuffer(rectapBuffer, bufferType, bufferSize);
+    initBuffer(rectapBuffer, bufferType, bufferSize, "rectap");
+    fprintf(stderr, "I INIT'ED SOMETHING\n");
 
     // initialize known values struct to hold the last known values
     KnownValues knownValues = {0};
@@ -112,7 +114,9 @@ int main(int argc, char *argv[]) {
     // reading from the buffer 
     // process data from obsrecBuffer, data observe wrote
     while (true){
+        fprintf(stderr, "IM TRYING TO READ\n");
         char* dataObs = readBuffer(obsrecBuffer);
+        fprintf(stderr, "I READ SOMETHING\n");
         // check for END marker symbolizing no more data to read
         if (strcmp(dataObs, "END_OF_DATA_YEET") == 0) {
             break;
@@ -121,9 +125,9 @@ int main(int argc, char *argv[]) {
             parseData(dataObs, &parsedData);
             if (strcmp(knownValues.endName, "") == 0 && nameInKnownVals(&knownValues, parsedData.name) == 1) {
                 char sample[100];
-                compileSample(&knownValues, sample);
-                printf("There is the sample: %s\n", sample);  
+                compileSample(&knownValues, sample); 
                 writeBuffer(rectapBuffer, sample);
+                fprintf(stderr, "RECONSTRUCT - Wrote to buffer: %s\n", sample);
             }
             updateLastKnownValues(&parsedData, &knownValues);
             //findEndName(&knownValues);
@@ -131,8 +135,8 @@ int main(int argc, char *argv[]) {
             if (strcmp(parsedData.name, knownValues.endName) == 0) {
                 char sample[100];
                 compileSample(&knownValues, sample);
-                printf("There is the sample: %s\n", sample);  
                 writeBuffer(rectapBuffer, sample);
+                fprintf(stderr, "RECONSTRUCT - Wrote to buffer: %s\n", sample);  
             }
         }
     }
@@ -140,6 +144,7 @@ int main(int argc, char *argv[]) {
     // write into the buffer, at the very end, the end marker
     // end of data yeet bc i dont think this will be part of the values we are observing
     writeBuffer(rectapBuffer, "END_OF_DATA_YEET");
+    fprintf(stderr, "RECONSTRUCT - Wrote to buffer: END_OF_DATA_YEET\n");
 
     // Detach from shared memory segments
     shmdt(shm_obsrec_addr);
@@ -148,7 +153,7 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void initBuffer(Buffer * buf, const char * type, int size) {
+/*void initBuffer(Buffer * buf, const char * type, int size) {
     buf->in = 0;
     buf->out = 0;
     buf->size = size;
@@ -168,6 +173,9 @@ void initBuffer(Buffer * buf, const char * type, int size) {
             fprintf(stderr, "Invalid size for ring buffer!\n");
             exit(1);
         }
+        buf->mutex = sem_open("mutex", O_CREAT, 0644, 1);
+        buf->slotsEmptyMutex = sem_open("slotsEmptyMutex", O_CREAT, 0644, size);
+        buf->slotsFullMutex = sem_open("slotsFullMutex", O_CREAT, 0644, 0);
     } else {
         fprintf(stderr, "Invalid type of buffer!\n");
         exit(1);
@@ -178,9 +186,9 @@ void initBuffer(Buffer * buf, const char * type, int size) {
 
     // Allocate each string in the buffer
     for (int i = 0; i < buf->size; i++) {
-        buf->data[i] = (char *)(buf->data + buf->size) + i * 100;  // Each string is 100 bytes
+        buf->data[i] = (char *)buf->data + buf->size * sizeof(char*) + i * 100;  // Each string is 100 bytes
     }
-}
+}*/
 
 int nameInKnownVals(KnownValues *myValues, char * name) {
     for (int i = 0; i < myValues->count; i++) {

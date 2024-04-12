@@ -6,6 +6,8 @@
 #include <sys/types.h>
 #include <sys/shm.h>
 #include <getopt.h>
+#include <semaphore.h>
+#include <fcntl.h>
 
 typedef struct {
     // Used for all bufs
@@ -15,13 +17,16 @@ typedef struct {
     // Used only for ring bufs
     int in;
     int out;
+    sem_t * mutex;
+    sem_t * slotsEmptyMutex;
+    sem_t * slotsFullMutex;
     // Used only for async bufs
     int latest;
     int reading;
     int slots[2];
 } Buffer;
 
-/*void initBuffer(Buffer * buf, const char * type, int size) {
+void initBuffer(Buffer * buf, const char * type, int size, char * identifier) {
     buf->in = 0;
     buf->out = 0;
     buf->size = size;
@@ -41,6 +46,21 @@ typedef struct {
             fprintf(stderr, "Invalid size for ring buffer!\n");
             exit(1);
         }
+        char mutexName[50];
+        char slotsEmptyMutexName[50];
+        char slotsFullMutexName[50];
+
+        sprintf(mutexName, "%s_mutex", identifier);
+        sprintf(slotsEmptyMutexName, "%s_slotsEmptyMutex", identifier);
+        sprintf(slotsFullMutexName, "%s_slotsFullMutex", identifier);
+
+        sem_unlink(mutexName);
+        sem_unlink(slotsEmptyMutexName);
+        sem_unlink(slotsFullMutexName);
+
+        buf->mutex = sem_open(mutexName, O_CREAT, 0644, 1);
+        buf->slotsEmptyMutex = sem_open(slotsEmptyMutexName, O_CREAT, 0644, size);
+        buf->slotsFullMutex = sem_open(slotsFullMutexName, O_CREAT, 0644, 0);
     } else {
         fprintf(stderr, "Invalid type of buffer!\n");
         exit(1);
@@ -53,7 +73,7 @@ typedef struct {
     for (int i = 0; i < buf->size; i++) {
         buf->data[i] = (char *)(buf->data + buf->size) + i * 100;  // Each string is 100 bytes
     }
-}*/
+}
 
 void asyncWrite (Buffer * buffer, char * item) {
   int pair, index;
@@ -78,24 +98,34 @@ char * asyncRead (Buffer * buffer) {
     return result;
 }
 
+
 void ringWrite (Buffer * buffer, char * item) {
-     while (((buffer->in + 1) % buffer->size) == buffer->out);
-     /* put value into the buffer */
-     strncpy(buffer->data[buffer->in], item, 99);
-     buffer->in = (buffer->in + 1) % buffer->size; 
+    sem_wait(buffer->mutex);
+    sem_wait(buffer->slotsEmptyMutex);
+
+    /* put value into the buffer */
+    strncpy(buffer->data[buffer->in], item, 99);
+    buffer->in = (buffer->in + 1) % buffer->size;
+
+    sem_post(buffer->mutex);
+    sem_post(buffer->slotsFullMutex);
 }
 
 char * ringRead (Buffer * buffer) {
-    while (buffer->out == buffer->in);
-    /* take one unit of data from the buffer */
-    char * tmp = malloc(100);
-    if (tmp == NULL) {
+    sem_wait(buffer->mutex);
+    sem_wait(buffer->slotsFullMutex);
+
+    char * result = malloc(100);
+    if (result == NULL) {
         fprintf(stderr, "malloc error");
         exit(1);
     }
-    strncpy(tmp, buffer->data[buffer->out], 99);
+    strncpy(result, buffer->data[buffer->out], 99);
     buffer->out = (buffer->out + 1) % buffer->size;
-    return tmp;
+
+    sem_post(buffer->mutex);
+    sem_post(buffer->slotsEmptyMutex);
+    return result;
 }
 
 char * readBuffer (Buffer * buffer) {
