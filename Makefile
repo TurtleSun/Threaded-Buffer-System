@@ -11,6 +11,7 @@ myshell: $(OBJS)
 
 clean:
 	rm -rf $(PROGS) *.o
+	-bash ./clearIPCS.sh
 
 tapper:
 	gcc -g -pthread tapper.c -o tapper 
