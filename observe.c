@@ -33,48 +33,6 @@ struct PairList {
 
 struct PairList pairlist = { .pairs = {0}, .numPairs = 0 };
 
-/*void initBuffer(Buffer * buf, const char * type, int size) {
-    buf->in = 0;
-    buf->out = 0;
-    buf->size = size;
-    buf->isAsync = 0;
-    buf->latest = 0;
-    buf->reading = 0;
-    buf->slots[0] = 0;
-    buf->slots[1] = 0;
-
-    // convert type to integer
-    if (strcmp(type, "async") == 0) {
-        buf->isAsync = 1;
-        buf->size = 4;
-    } else if (strcmp(type, "sync") == 0) {
-        buf->isAsync = 0;
-        if (size <= 0) {
-            fprintf(stderr, "Invalid size for ring buffer!\n");
-            exit(1);
-        }
-        fprintf(stderr, "%d", size);
-        buf->mutex = sem_open("mutex", O_CREAT, 0644, 1);
-        buf->slotsEmptyMutex = sem_open("slotsEmptyMutex", O_CREAT, 0644, size);
-        buf->slotsFullMutex = sem_open("slotsFullMutex", O_CREAT, 0644, 0);
-        if (buf->mutex == SEM_FAILED || buf->slotsEmptyMutex == SEM_FAILED || buf->slotsFullMutex == SEM_FAILED) {
-            perror("sem_open error");
-            exit(1);
-        }
-    } else {
-        fprintf(stderr, "Invalid type of buffer!\n");
-        exit(1);
-    }
-
-    // Allocate data pointers in shared memory
-    buf->data = (char**)(buf + 1);  // The data array starts immediately after the Buffer struct
-
-    // Allocate each string in the buffer
-    for (int i = 0; i < buf->size; i++) {
-        buf->data[i] = (char *)buf->data + buf->size * sizeof(char*) + i * 100;  // Each string is 100 bytes
-    }
-}*/
-
 struct PairList updateLastKnown(struct PairList pairlist, char * name, char * newVal) {
     for (int i = 0; i < pairlist.numPairs; i++) {
         if (strcmp(pairlist.pairs[i].name, name) == 0 && strcmp(pairlist.pairs[i].value, newVal) != 0) {
@@ -107,48 +65,7 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
     }
-    int shm_Id = shmget(KEY, SHMSIZE, 0666);
-    if (shm_Id == -1) {
-    // something went horribly wrong        
-    perror("shmget error");
-    exit(1);
-    }
-
-    void * shm_addr = shmat(shm_Id, NULL, 0);
-    if (shm_addr == NULL) {
-        // something still went horribly wrong
-        perror("malloc error");
-        exit(1);
-    }
-
-    // cast shared memory to a buffer
-    Buffer *shmBuffer = (Buffer *)shm_addr;
-
-    // intialize buffer
-    // depending on the buffer type, we need to initialize the buffer differently
-    // check from inputs
-    // Variables for command line arguments
-    char *bufferType = NULL;
-    int bufferSize = 0;
-
-    // Parsing command line arguments
-    int opt;
-    while ((opt = getopt(argc, argv, "b:s:")) != -1) {
-        switch (opt) {
-            case 'b':
-                bufferType = optarg;
-                break;
-            case 's':
-                bufferSize = atoi(optarg);
-                break;
-            default:
-                fprintf(stderr, "Usage: %s [-b bufferType] [-s bufferSize]\n", argv[0]);
-                exit(EXIT_FAILURE);
-        }
-    }
-
-    // Initialize the buffer with received type and size
-    initBuffer(shmBuffer, bufferType, bufferSize, "obsrec");
+    Buffer * shmBuffer = openBuffer(KEY, SHMSIZE, "obsrec");
 
     // read and parse from either a file or stdin
     char line[MAX_LINE_LEN];
@@ -197,7 +114,7 @@ int main(int argc, char *argv[]) {
 
     // close shared memory
     // detach it
-    shmdt(shm_addr);
+    shmdt(shmBuffer);
 
     // exit
     return 0;

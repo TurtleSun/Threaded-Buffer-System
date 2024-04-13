@@ -14,7 +14,7 @@ clean:
 	-bash ./clearIPCS.sh
 
 tapper:
-	gcc -g -pthread tapper.c -o tapper 
+	gcc -g -pthread tapper.c -o tapper bufferLib.c
 
 observe:
 	gcc -g -pthread -o observe observe.c bufferLib.c

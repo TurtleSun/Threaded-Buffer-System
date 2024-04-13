@@ -36,13 +36,10 @@ int main(int argc, char *argv[]){
     keys[0] = 1234;
     keys[1] = 5678;
     // number of processes is 3: p1 observe, p2 reconstruct, p3 tapplot
+    int bufSize = atoi(bufferInfo.bufferSize);
     for (int i = 0; i < num_processes - 1; i++) {
-        shmIDs[i] = shmget(keys[i], SHMSIZE, IPC_CREAT | 0666);
-        shmAddr[i] = shmat(shmIDs[i], NULL, 0);
+        createBuffer(keys[i], SHMSIZE, bufferInfo.isAsync, bufSize, "tapper");
     }
-
-    printf("shmIDs[0]: %d\n", shmIDs[0]);
-    printf("shmIDs[1]: %d\n", shmIDs[1]);
 
     // default arg number for tapplot
     char argnValue[10] = "1";

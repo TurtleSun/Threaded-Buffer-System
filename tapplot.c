@@ -38,21 +38,7 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    // open shared memory that we initialized in tapper between reconstruct and tapplot
-    int shm_Id_rectap = shmget(PLOT_KEY, SHMSIZE, 0666);
-    if (shm_Id_rectap == -1) {
-        // something went horribly wrong
-        perror("shmatt error");
-        exit(1);
-    }
-
-    void * shm_rectap_addr = shmat(shm_Id_rectap, NULL, 0);
-    if (shm_rectap_addr == NULL) {
-        perror("shmat failed for tapplot");
-        exit(1);
-    }
-
-    Buffer *shmBuffer = (Buffer *)shm_rectap_addr;
+    Buffer * shmBuffer = openBuffer(PLOT_KEY, SHMSIZE, "rectap");
 
     // Open a pipe to gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
@@ -90,7 +76,7 @@ int main(int argc, char *argv[]) {
 
     // close shared memory
     // detach it
-    shmdt(shm_rectap_addr);
+    shmdt(shmBuffer);
 
     // close pipe to gnuplot
     pclose(gnuplotPipe);

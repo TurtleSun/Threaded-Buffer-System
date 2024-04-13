@@ -26,7 +26,18 @@ typedef struct {
     int slots[2];
 } Buffer;
 
-void initBuffer(Buffer * buf, const char * type, int size, char * identifier) {
+void createBuffer(key_t key, int shmsize, const char * type, int size, char * identifier) {
+    int shmID = shmget(key, shmsize, IPC_CREAT | 0666);
+    if (shmID == -1) {
+        perror("shmget error");
+        exit(1);
+    }
+    void * shmAddr = shmat(shmID, NULL, 0);
+    if (shmAddr == (void *)-1) {
+        perror("malloc error");
+        exit(1);
+    }
+    Buffer * buf = (Buffer *)shmAddr;
     buf->in = 0;
     buf->out = 0;
     buf->size = size;
@@ -46,33 +57,43 @@ void initBuffer(Buffer * buf, const char * type, int size, char * identifier) {
             fprintf(stderr, "Invalid size for ring buffer!\n");
             exit(1);
         }
-        char mutexName[50];
-        char slotsEmptyMutexName[50];
-        char slotsFullMutexName[50];
 
-        sprintf(mutexName, "%s_mutex", identifier);
-        sprintf(slotsEmptyMutexName, "%s_slotsEmptyMutex", identifier);
-        sprintf(slotsFullMutexName, "%s_slotsFullMutex", identifier);
+        buf->mutex = (sem_t *)(shmAddr + sizeof(Buffer) + buf->size * sizeof(char*) + buf->size * 100);
+        buf->slotsEmptyMutex = (sem_t *)((char*)buf->mutex + sizeof(sem_t));
+        buf->slotsFullMutex = (sem_t *)((char*)buf->slotsEmptyMutex + sizeof(sem_t));
 
-        sem_unlink(mutexName);
-        sem_unlink(slotsEmptyMutexName);
-        sem_unlink(slotsFullMutexName);
-
-        buf->mutex = sem_open(mutexName, O_CREAT, 0644, 1);
-        buf->slotsEmptyMutex = sem_open(slotsEmptyMutexName, O_CREAT, 0644, size);
-        buf->slotsFullMutex = sem_open(slotsFullMutexName, O_CREAT, 0644, 0);
+        if (sem_init(buf->mutex, 1, 1) == -1 ||
+            sem_init(buf->slotsEmptyMutex, 1, buf->size) == -1 ||
+            sem_init(buf->slotsFullMutex, 1, 0) == -1) {
+            perror("sem_init error");
+            exit(1);
+        }
     } else {
         fprintf(stderr, "Invalid type of buffer!\n");
         exit(1);
     }
 
-    // Allocate data pointers in shared memory
-    buf->data = (char**)(buf + 1);  // The data array starts immediately after the Buffer struct
+    buf->data = (char**) (shmAddr + sizeof(Buffer));  // The data array starts immediately after the Buffer struct
 
     // Allocate each string in the buffer
     for (int i = 0; i < buf->size; i++) {
-        buf->data[i] = (char *)(buf->data + buf->size) + i * 100;  // Each string is 100 bytes
+        buf->data[i] = (char*) (shmAddr + sizeof(Buffer) + buf->size * sizeof(char*) + i * 100);  // Each string is 100 bytes
     }
+}
+
+Buffer * openBuffer(key_t key, int shmsize, char * identifier) {
+    int shmID = shmget(key, shmsize, 0666);
+    if (shmID == -1) {
+        perror("shmget error");
+        exit(1);
+    }
+    void * shmAddr = shmat(shmID, NULL, 0);
+    if (shmAddr == (void*)-1) {
+        perror("malloc error");
+        exit(1);
+    }
+    Buffer * buf = (Buffer *)shmAddr;
+    return (Buffer *)shmAddr;
 }
 
 void asyncWrite (Buffer * buffer, char * item) {
@@ -100,8 +121,8 @@ char * asyncRead (Buffer * buffer) {
 
 
 void ringWrite (Buffer * buffer, char * item) {
-    sem_wait(buffer->mutex);
     sem_wait(buffer->slotsEmptyMutex);
+    sem_wait(buffer->mutex);
 
     /* put value into the buffer */
     strncpy(buffer->data[buffer->in], item, 99);
@@ -112,8 +133,8 @@ void ringWrite (Buffer * buffer, char * item) {
 }
 
 char * ringRead (Buffer * buffer) {
-    sem_wait(buffer->mutex);
     sem_wait(buffer->slotsFullMutex);
+    sem_wait(buffer->mutex);
 
     char * result = malloc(100);
     if (result == NULL) {

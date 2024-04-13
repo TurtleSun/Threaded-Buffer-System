@@ -56,49 +56,8 @@ int nameInKnownVals(KnownValues *values, char * name);
 
 int main(int argc, char *argv[]) {
     // open shared memory that we initialized in tapper between observe and reconstruct
-    int shm_Id_obsrec = shmget(OBSERVE_KEY, SHMSIZE, 0666);
-    void * shm_obsrec_addr = shmat(shm_Id_obsrec, NULL, 0);
-
-    // also open shared memory that we initialized in tapper between reconstruct and tapplot
-    int shm_Id_rectap = shmget(PLOT_KEY, SHMSIZE, 0666);
-    void * shm_rectap_addr = shmat(shm_Id_rectap, NULL, 0);
-
-    if (shm_Id_obsrec == -1 || shm_Id_rectap == -1) {
-        // something went horribly wrong
-        perror("shmatt error");
-        exit(1);
-    }
-
-    // buffer for shared memory between observe and reconstruct
-    Buffer *obsrecBuffer = (Buffer *)shm_obsrec_addr;
-    // buffer for shared memory between reconstruct and tapplot
-    Buffer *rectapBuffer = (Buffer *)shm_rectap_addr;
-
-    // initialize buffers
-    // depending on the buffer type, we need to initialize the buffer differently
-    // check from inputs
-    // Variables for command line arguments
-    char *bufferType = NULL;
-    int bufferSize = 0;
-
-    // Parsing command line arguments
-    int opt;
-    while ((opt = getopt(argc, argv, "b:s:")) != -1) {
-        switch (opt) {
-            case 'b':
-                bufferType = optarg;
-                break;
-            case 's':
-                bufferSize = atoi(optarg);
-                break;
-            default:
-                fprintf(stderr, "Usage: %s [-b bufferType] [-s bufferSize]\n", argv[0]);
-                exit(EXIT_FAILURE);
-        }
-    }
-
-    initBuffer(rectapBuffer, bufferType, bufferSize, "rectap");
-    fprintf(stderr, "I INIT'ED SOMETHING\n");
+    Buffer * obsrecBuffer = openBuffer(OBSERVE_KEY, SHMSIZE, "obsrec");
+    Buffer * rectapBuffer = openBuffer(PLOT_KEY, SHMSIZE, "rectap");
 
     // initialize known values struct to hold the last known values
     KnownValues knownValues = {0};
@@ -147,8 +106,8 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "RECONSTRUCT - Wrote to buffer: END_OF_DATA_YEET\n");
 
     // Detach from shared memory segments
-    shmdt(shm_obsrec_addr);
-    shmdt(shm_rectap_addr);
+    shmdt(obsrecBuffer);
+    shmdt(rectapBuffer);
 
     return 0;
 }
