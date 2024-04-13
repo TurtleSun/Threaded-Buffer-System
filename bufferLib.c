@@ -26,15 +26,16 @@ typedef struct {
     int slots[2];
 } Buffer;
 
+// Creating a brand new buffer and initializing its elements
 void createBuffer(key_t key, int shmsize, const char * type, int size) {
-    int shmID = shmget(key, shmsize, IPC_CREAT | 0666);
+    int shmID = shmget(key, sizeof(Buffer), IPC_CREAT | 0666);
     if (shmID == -1) {
         perror("shmget error");
         exit(1);
     }
     void * shmAddr = shmat(shmID, NULL, 0);
     if (shmAddr == (void *)-1) {
-        perror("malloc error");
+        perror("shmat error");
         exit(1);
     }
     Buffer * buf = (Buffer *)shmAddr;
@@ -58,7 +59,19 @@ void createBuffer(key_t key, int shmsize, const char * type, int size) {
             exit(1);
         }
 
-        buf->mutex = (sem_t *)(shmAddr + sizeof(Buffer) + buf->size * sizeof(char*) + buf->size * 100);
+        int mutexID = shmget(key - 1, sizeof(sem_t) * 3, IPC_CREAT | 0666);
+        if (mutexID == -1) {
+            perror("shmget error");
+            exit(1);
+        }
+
+        void * mutexAddr = shmat(mutexID, NULL, 0);
+        if (mutexAddr == (void *)-1) {
+            perror("shmat error");
+            exit(1);
+        }
+
+        buf->mutex = (sem_t *)mutexAddr;
         buf->slotsEmptyMutex = (sem_t *)((char*)buf->mutex + sizeof(sem_t));
         buf->slotsFullMutex = (sem_t *)((char*)buf->slotsEmptyMutex + sizeof(sem_t));
 
@@ -73,26 +86,100 @@ void createBuffer(key_t key, int shmsize, const char * type, int size) {
         exit(1);
     }
 
-    buf->data = (char**) (shmAddr + sizeof(Buffer));  // The data array starts immediately after the Buffer struct
+    int dataID = shmget(key - 2, buf->size * sizeof(char*), IPC_CREAT | 0666);
+    if (dataID == -1) {
+        perror("shmget error");
+        exit(1);
+    }
 
-    // Allocate each string in the buffer
+    void * dataAddr = shmat(dataID, NULL, 0);
+    if (dataAddr == (void *)-1) {
+        perror("shmat error");
+        exit(1);
+    }
+
+    buf->data = (char**)dataAddr;
+
+    int elemIDs[buf->size];
     for (int i = 0; i < buf->size; i++) {
-        buf->data[i] = (char*) (shmAddr + sizeof(Buffer) + buf->size * sizeof(char*) + i * 100);  // Each string is 100 bytes
+        elemIDs[i] = shmget(key + i + 1, 100, IPC_CREAT | 0666);
+        if (elemIDs[i] == -1) {
+            perror("shmget error");
+            exit(1);
+        }
+
+        void * elemAddr = shmat(elemIDs[i], NULL, 0);
+        if (elemAddr == (void *)-1) {
+            perror("shmat error");
+            exit(1);
+        }
+
+        buf->data[i] = (char*)elemAddr;
     }
 }
 
+// Opening an existing buffer
 Buffer * openBuffer(key_t key, int shmsize) {
-    int shmID = shmget(key, shmsize, 0666);
+    int shmID = shmget(key, sizeof(Buffer), 0666);
     if (shmID == -1) {
         perror("shmget error");
         exit(1);
     }
     void * shmAddr = shmat(shmID, NULL, 0);
     if (shmAddr == (void*)-1) {
-        perror("malloc error");
+        perror("shmat error");
         exit(1);
     }
     Buffer * buf = (Buffer *)shmAddr;
+
+    int mutexID = shmget(key - 1, sizeof(sem_t) * 3, 0666);
+    if (mutexID == -1) {
+        perror("shmget error");
+        exit(1);
+    }
+
+    if (buf->isAsync == 0) {
+        void * mutexAddr = shmat(mutexID, NULL, 0);
+        if (mutexAddr == (void *)-1) {
+            perror("shmat error");
+            exit(1);
+        }
+
+        buf->mutex = (sem_t *)mutexAddr;
+        buf->slotsEmptyMutex = (sem_t *)((char*)buf->mutex + sizeof(sem_t));
+        buf->slotsFullMutex = (sem_t *)((char*)buf->slotsEmptyMutex + sizeof(sem_t));
+    }
+
+    int dataID = shmget(key - 2, buf->size * sizeof(char*), 0666);
+    if (dataID == -1) {
+        perror("shmget error");
+        exit(1);
+    }
+
+    void * dataAddr = shmat(dataID, NULL, 0);
+    if (dataAddr == (void *)-1) {
+        perror("shmat error");
+        exit(1);
+    }
+
+    buf->data = (char**)dataAddr;
+
+    int elemIDs[buf->size];
+    for (int i = 0; i < buf->size; i++) {
+        elemIDs[i] = shmget(key + i + 1, 100, 0666);
+        if (elemIDs[i] == -1) {
+            perror("shmget error");
+            exit(1);
+        }
+
+        void * elemAddr = shmat(elemIDs[i], NULL, 0);
+        if (elemAddr == (void *)-1) {
+            perror("shmat error");
+            exit(1);
+        }
+
+        buf->data[i] = (char*)elemAddr;
+    }
     return (Buffer *)shmAddr;
 }
 
