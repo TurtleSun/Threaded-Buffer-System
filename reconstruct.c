@@ -45,27 +45,45 @@ typedef struct {
     char endName[100];
 } KnownValues;
 
-typedef struct {
-    // holds pairs for a single sample
-    Pair pairs[MAX_UNIQUE_NAMES];
-    // number of pairs in this sample
-    int pairCount;
-} Sample;
+void initBuffer(Buffer * buf, const char * type, int size) {
+    buf->in = 0;
+    buf->out = 0;
+    buf->size = size;
+    buf->isAsync = 0;
+    buf->latest = 0;
+    buf->reading = 0;
+    buf->slots[0] = 0;
+    buf->slots[1] = 0;
 
-typedef struct {
-    // array to hold samples
-    Sample samples[MAX_SAMPLES];
-    // current number of samples
-    int sampleCount;
-} Samples;
+    // convert type to integer
+    if (strcmp(type, "async") == 0) {
+        buf->isAsync = 1;
+        buf->size = 4;
+    } else if (strcmp(type, "sync") == 0) {
+        buf->isAsync = 0;
+        if (size <= 0) {
+            fprintf(stderr, "Invalid size for ring buffer!\n");
+            exit(1);
+        }
+    } else {
+        fprintf(stderr, "Invalid type of buffer!\n");
+        exit(1);
+    }
+
+    // Allocate data pointers in shared memory
+    buf->data = (char**)(buf + 1);  // The data array starts immediately after the Buffer struct
+
+    // Allocate each string in the buffer
+    for (int i = 0; i < buf->size; i++) {
+        buf->data[i] = (char *)(buf->data + buf->size) + i * 100;  // Each string is 100 bytes
+    }
+}
 
 // Function declarations
 void parseData(const char* data, Pair* outPair);
 void updateLastKnownValues(Pair* newPair, KnownValues* knownValues);
-bool shouldCompileSample(Pair* newPair, KnownValues* knownValues);
 void findEndName(KnownValues *values);
 void compileSample(KnownValues* knownValues, char* outSample);
-void addSample(Samples* samples, KnownValues* knownValues);
 
 int main(int argc, char *argv[]) {
     // open shared memory that we initialized in tapper between observe and reconstruct
@@ -117,40 +135,49 @@ int main(int argc, char *argv[]) {
     // initialize a pair to hold the parsed data
     Pair parsedData;
 
+    // Initialize the buffer with received type and size
+    initBuffer(obsrecBuffer, bufferType, bufferSize);
+    initBuffer(rectapBuffer, bufferType, bufferSize);
+
     ///////////////////// READING FROM OBSERVE
     // read from shared memory between observe and reconstruct and reconstruct the data logic in separate function
     // while reading flag is 0 then the data is not ready to read
-    while (!obsrecBuffer->reading) {
-        // sleep briefly
-        usleep(1000);
-    }
 
-    Samples samples = {0};
+   // while (!obsrecBuffer->reading) {
+     //   // sleep briefly
+       // usleep(1000);
+    //}
 
     // reading from the buffer 
     // process data from obsrecBuffer, data observe wrote
     while (true){
+        printf("Reading data from obsrecBuffer\n");
         char* dataObs = readBuffer(obsrecBuffer);
+        printf("YULU");
         // check for END marker symbolizing no more data to read
         if (strcmp(dataObs, "END_OF_DATA_YEET") == 0) {
             break;
         }
+        printf("Data: %s\n", dataObs);
         if (dataObs != NULL) {
             parseData(dataObs, &parsedData);
+            // print values
+            printf("Name: %s, Value: %s\n", parsedData.name, parsedData.value);
             updateLastKnownValues(&parsedData, &knownValues);
             findEndName(&knownValues);
             // if we have found the end name, compile the sample
             if (strcmp(parsedData.name, knownValues.endName) == 0) {
-                char sample[MAX_TASK_SIZE];
+                printf("End name found\n");
+                char sample[MAX_SAMPLE_SIZE];
                 compileSample(&knownValues, sample);
                 printf("There is the sample: %s\n", sample);  
-                writeBuffer(buffer, sample);
+                writeBuffer(rectapBuffer, sample);
             }
         }
     }
 
     // once it is done writing data to the buffer, set the reading flag to 1
-    rectapBuffer->reading = 1;
+    //rectapBuffer->reading = 1;
     // write into the buffer, at the very end, the end marker
     // end of data yeet bc i dont think this will be part of the values we are observing
     writeBuffer(rectapBuffer, "END_OF_DATA_YEET");
@@ -174,7 +201,7 @@ void parseData(const char* data, Pair* outPair) {
 void updateLastKnownValues(Pair* newPair, KnownValues* knownValues) {
     int unique = 0;
     // for each known value
-    for (int i = 0; i < knownValues->count; ++i) {
+    for (int i = 0; i < knownValues->pairs[i].count; ++i) {
         // if the new name is found in the list of known values, update the value
         if (strcmp(knownValues->pairs[i].name, newPair->name) == 0) {
             strcpy(knownValues->pairs[i].value, newPair->value);
@@ -204,46 +231,6 @@ void findEndName(KnownValues *values) {
         strcpy(values->endName, values->pairs[values->count - 1].name);
     }
 
-}
-
-// isEndName function
-// checks if the name is the end name
-bool isEndName(const char* name, KnownValues *values) {
-    return strcmp(name, values->endName) == 0;
-}
-
-// compileSample function
-// compiles the sample from the known values and end name
-
-
-// addSample function
-// adds a sample to the samples struct
-void addSample(Samples* samples, KnownValues* knownValues) {
-    if (samples->sampleCount >= MAX_SAMPLES) {
-        // No more space for samples
-        return;
-    }
-    
-    Sample* newSample = &samples->samples[samples->sampleCount++];
-    // initialize the pair count for the new sample
-    newSample->pairCount = 0;
-    
-    // Copy data from knownValues to the newSample
-    for (int i = 0; i < knownValues->count; i++) {
-        strcpy(newSample->pairs[i].name, knownValues->pairs[i].name);
-        strcpy(newSample->pairs[i].value, knownValues->pairs[i].value);
-        newSample->pairCount++;
-    }
-}
-
-// shouldCompileSample function
-// checks if the sample should be compiled
-bool shouldCompileSample(Pair* newPair, KnownValues* knownValues) {
-    // if the new pair is the end name, compile the sample
-    if (isEndName(newPair->name, knownValues)) {
-        return 1;
-    }
-    return 0;
 }
 
 // compileSample function

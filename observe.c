@@ -19,6 +19,18 @@
             /// should this be buffer_size?
 #define SHMSIZE 100000
 
+struct Pair {
+    char * name;
+    char * value;
+};
+
+struct PairList {
+    struct Pair pairs[10];
+    int numPairs;
+};
+
+struct PairList pairlist = { .pairs = {0}, .numPairs = 0 };
+
 void initBuffer(Buffer * buf, const char * type, int size) {
     buf->in = 0;
     buf->out = 0;
@@ -53,8 +65,38 @@ void initBuffer(Buffer * buf, const char * type, int size) {
     }
 }
 
+struct PairList updateLastKnown(struct PairList pairlist, char * name, char * newVal) {
+    for (int i = 0; i < pairlist.numPairs; i++) {
+        if (strcmp(pairlist.pairs[i].name, name) == 0 && strcmp(pairlist.pairs[i].value, newVal) != 0) {
+            strcpy(pairlist.pairs[i].value, newVal);
+            return pairlist;
+        }
+    }
+    strcpy(pairlist.pairs[pairlist.numPairs].name, name);
+    strcpy(pairlist.pairs[pairlist.numPairs].value, newVal);
+    pairlist.numPairs++;
+    return pairlist;
+}
+
+char * getLastKnown(struct PairList pairlist, char * name) {
+    for (int i = 0; i < pairlist.numPairs; i++) {
+        if (strcmp(pairlist.pairs[i].name, name) == 0) {
+            return pairlist.pairs[i].value;
+        }
+    }
+    return "";
+}
+
 int main(int argc, char *argv[]) {
     // open shared memory that we initialized in tapper
+    for (int i = 0; i < 10; i++) {
+        pairlist.pairs[i].name = malloc(100);
+        pairlist.pairs[i].value = malloc(100);
+        if (pairlist.pairs[i].name == NULL || pairlist.pairs[i].value == NULL) {
+            fprintf(stderr, "malloc error");
+            exit(1);
+        }
+    }
     int shm_Id = shmget(KEY, SHMSIZE, 0666);
     printf("shm_Id: %d\n", shm_Id);
     if (shm_Id == -1) {
@@ -122,13 +164,11 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
-        // print line
-        printf("name: %s, value: %s\n", name, value);
-
         // compare current value with last value, if they are different write value in shared memory
-        if(strcmp(lastValue, value) != 0) {
+        if(strcmp(getLastKnown(pairlist, name), value) != 0) {
             printf("Value changed: %s\n", value);
             strcpy(lastValue, value);
+            pairlist = updateLastKnown(pairlist, name, value);
             // Write to shared memory
             //TODO: Change shm_addr here to an attribute (slot) of a structure that we cast shm_addr to.
             // snprintf(shm_addr, MAX_LINE_LEN, "%s=%s", name, value);
@@ -136,17 +176,14 @@ int main(int argc, char *argv[]) {
             // Prepare the string to write into the buffer
             char bufferData[MAX_LINE_LEN];
             snprintf(bufferData, sizeof(bufferData), "%s=%s", name, value);
-            
-            printf("bufferData: %s\n", bufferData);
             // Write into the buffer based on its type
             writeBuffer(shmBuffer, bufferData);
             printf("Wrote to buffer\n");
-            // print whats inside
-            printf("shmBuffer: %s\n", shmBuffer->data[0]);
         }
     }
     // once it is done writing data to the buffer, set the reading flag to 1
-    shmBuffer->reading = 1;
+    //printf("Setting reading flag to 1\n");
+    //shmBuffer->reading = 1;
     // write into the buffer, at the very end, the end marker
     // end of data yeet bc i dont think this will be part of the values we are observing
     writeBuffer(shmBuffer, "END_OF_DATA_YEET");

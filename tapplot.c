@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 
+
 void processAndPlotData(char* data, FILE* gnuplotPipe, int argn, int sampleNumber);
 
 #define PLOT_KEY 5678
@@ -133,7 +134,6 @@ void gnuplot() {
     FILE *gnuplotPipe = popen("gnuplot", "w");
     if (!gnuplotPipe) {
         fprintf(stderr, "Error opening pipe to Gnuplot");
-        pthread_exit(NULL);
     }
 
     // Gnuplot script
@@ -148,5 +148,4 @@ void gnuplot() {
     // Close the pipe
     pclose(gnuplotPipe);
 }
-
 
