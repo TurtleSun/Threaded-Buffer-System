@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
     }
-    Buffer * shmBuffer = openBuffer(KEY, SHMSIZE, "obsrec");
+    Buffer * shmBuffer = openBuffer(KEY, SHMSIZE);
 
     // read and parse from either a file or stdin
     char line[MAX_LINE_LEN];
@@ -73,6 +73,7 @@ int main(int argc, char *argv[]) {
 
     // loop to read from stdin
     while (fgets(line, MAX_LINE_LEN, stdin) != NULL){
+        fprintf(stderr, "OBSERVE GOT LINE %s\n", line);
         // parse the line
         // remove newline character
         line[strcspn(line, "\n")] = 0;
@@ -101,6 +102,7 @@ int main(int argc, char *argv[]) {
             snprintf(bufferData, sizeof(bufferData), "%s=%s", name, value);
             
             // Write into the buffer based on its type
+            fprintf(stderr, "OBSERVE - Writing to buffer: %s\n", bufferData);
             writeBuffer(shmBuffer, bufferData);
             printf("OBSERVE - Wrote to buffer: %s\n", bufferData);
             // print whats inside
@@ -117,5 +119,7 @@ int main(int argc, char *argv[]) {
     shmdt(shmBuffer);
 
     // exit
+    fprintf(stderr, "OBSERVE RETS\n");
+    fflush(stderr);
     return 0;
 }

@@ -56,8 +56,8 @@ int nameInKnownVals(KnownValues *values, char * name);
 
 int main(int argc, char *argv[]) {
     // open shared memory that we initialized in tapper between observe and reconstruct
-    Buffer * obsrecBuffer = openBuffer(OBSERVE_KEY, SHMSIZE, "obsrec");
-    Buffer * rectapBuffer = openBuffer(PLOT_KEY, SHMSIZE, "rectap");
+    Buffer * obsrecBuffer = openBuffer(OBSERVE_KEY, SHMSIZE);
+    Buffer * rectapBuffer = openBuffer(PLOT_KEY, SHMSIZE);
 
     // initialize known values struct to hold the last known values
     KnownValues knownValues = {0};
@@ -109,6 +109,8 @@ int main(int argc, char *argv[]) {
     shmdt(obsrecBuffer);
     shmdt(rectapBuffer);
 
+    fprintf(stderr, "RECON RETS\n");
+    fflush(stderr);
     return 0;
 }
 

@@ -20,8 +20,8 @@ typedef struct {
 } Buffer;
 
 //init
-void createBuffer(key_t key, int shmsize, const char * type, int size, char * identifier);
-Buffer * openBuffer(key_t key, int shmsize, char * identifier);
+void createBuffer(key_t key, int shmsize, const char * type, int size);
+Buffer * openBuffer(key_t key, int shmsize);
 
 //writes
 void asyncWrite (Buffer * buffer, char * item);

@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    Buffer * shmBuffer = openBuffer(PLOT_KEY, SHMSIZE, "rectap");
+    Buffer * shmBuffer = openBuffer(PLOT_KEY, SHMSIZE);
 
     // Open a pipe to gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
@@ -82,6 +82,8 @@ int main(int argc, char *argv[]) {
     pclose(gnuplotPipe);
 
     // exit
+    fprintf(stderr, "TAPPLOT RETS\n");
+    fflush(stderr);
     return 0;
 }
 

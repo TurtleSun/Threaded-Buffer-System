@@ -26,7 +26,7 @@ typedef struct {
     int slots[2];
 } Buffer;
 
-void createBuffer(key_t key, int shmsize, const char * type, int size, char * identifier) {
+void createBuffer(key_t key, int shmsize, const char * type, int size) {
     int shmID = shmget(key, shmsize, IPC_CREAT | 0666);
     if (shmID == -1) {
         perror("shmget error");
@@ -81,7 +81,7 @@ void createBuffer(key_t key, int shmsize, const char * type, int size, char * id
     }
 }
 
-Buffer * openBuffer(key_t key, int shmsize, char * identifier) {
+Buffer * openBuffer(key_t key, int shmsize) {
     int shmID = shmget(key, shmsize, 0666);
     if (shmID == -1) {
         perror("shmget error");
@@ -121,8 +121,19 @@ char * asyncRead (Buffer * buffer) {
 
 
 void ringWrite (Buffer * buffer, char * item) {
-    sem_wait(buffer->slotsEmptyMutex);
-    sem_wait(buffer->mutex);
+    fprintf(stderr, "STARTING RING WRITE\n");
+    int res1 = sem_wait(buffer->slotsEmptyMutex);
+    if (res1 == -1) {
+        perror("sem_wait error");
+        exit(1);
+    }
+    fprintf(stderr, "PASSED SEM_WAIT\n");
+    int res2 = sem_wait(buffer->mutex);
+    if (res2 == -1) {
+        perror("sem_wait error");
+        exit(1);
+    }
+    fprintf(stderr, "PASSED SEM_WAIT TWO\n");
 
     /* put value into the buffer */
     strncpy(buffer->data[buffer->in], item, 99);
@@ -130,6 +141,7 @@ void ringWrite (Buffer * buffer, char * item) {
 
     sem_post(buffer->mutex);
     sem_post(buffer->slotsFullMutex);
+    fprintf(stderr, "FINISHED RING WRITE\n");
 }
 
 char * ringRead (Buffer * buffer) {
