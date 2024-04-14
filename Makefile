@@ -11,15 +11,16 @@ myshell: $(OBJS)
 
 clean:
 	rm -rf $(PROGS) *.o
+	-bash ./clearIPCS.sh
 
 tapper:
-	gcc -g tapper.c -o tapper 
+	gcc -g -pthread tapper.c -o tapper bufferLib.c
 
 observe:
-	gcc -g -o observe observe.c bufferLib.c
+	gcc -g -pthread -o observe observe.c bufferLib.c
 
 reconstruct:
-	gcc -g -o reconstruct reconstruct.c bufferLib.c
+	gcc -g -pthread -o reconstruct reconstruct.c bufferLib.c
 
 tapplot:
-	gcc -g -o tapplot tapplot.c bufferLib.c
+	gcc -g -pthread -o tapplot tapplot.c bufferLib.c

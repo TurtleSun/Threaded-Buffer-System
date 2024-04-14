@@ -10,12 +10,22 @@
 #include <unistd.h>
 #include <stdbool.h>
 
-
-void processAndPlotData(char* data, FILE* gnuplotPipe, int argn, int sampleNumber);
-
 #define PLOT_KEY 5678
 #define SHMSIZE 100000
 #define MAX_NAMES 100
+#define MAX_NAME_LEN 50
+#define MAX_VALUE_LEN 50
+
+typedef struct {
+    char name[MAX_NAME_LEN];
+    char value[MAX_VALUE_LEN];
+    // extra field to count appearances of each pair
+    int count;
+} Pair;
+
+void processAndPlotData(char* data, FILE* gnuplotPipe, int argn, int sampleNumber);
+void gnuplot(void * arg);
+void parseData(char* data, Pair *outPair);
 
 int main(int argc, char *argv[]) {
    // get argn from argv array passed in
@@ -28,21 +38,7 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    // open shared memory that we initialized in tapper between reconstruct and tapplot
-    int shm_Id_rectap = shmget(PLOT_KEY, SHMSIZE, 0666);
-    if (shm_Id_rectap == -1) {
-        // something went horribly wrong
-        perror("shmatt error");
-        exit(1);
-    }
-
-    void * shm_rectap_addr = shmat(shm_Id_rectap, NULL, 0);
-    if (shm_rectap_addr == NULL) {
-        perror("shmat failed for tapplot");
-        exit(1);
-    }
-
-    Buffer *shmBuffer = (Buffer *)shm_rectap_addr;
+    Buffer * shmBuffer = openBuffer(PLOT_KEY, SHMSIZE);
 
     // Open a pipe to gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
@@ -57,28 +53,19 @@ int main(int argc, char *argv[]) {
     fprintf(gnuplotPipe, "set title 'Data Plot'\n");
     fprintf(gnuplotPipe, "set xlabel 'Sample Number'\n");
     fprintf(gnuplotPipe, "set ylabel 'Value'\n");
-    fprintf(gnuplotPipe, "plot '-' using 1:2 with lines title 'Field %d'\n", argn);
+    fprintf(gnuplotPipe, "plot '-' using 1:2 with lines title 'Field %d'\n", 0);
+      
 
-
-    // READING FROM RECONSTRUCT BUFFER
-    // if reading flag is 0 then the data is not ready to read
-    while (!shmBuffer->reading) {
-        // sleep briefly
-        usleep(1000);
-    }
-
-    // keep track of sample number
-    int sampleNumber = 0;
-
-    // reading from the buffer 
-    while (true){
+    int idx = -1;
+    while (1){
+        idx++;
         char* data = readBuffer(shmBuffer);
         // check for END marker symbolizing no more data to read
-        if (strcmp(data, "END_OF_DATA_YEET") == 0) {
+        if (strcmp(data, "END_OF_DATA") == 0) {
             break;
         }
         if (data != NULL) {
-            processAndPlotData(data, gnuplotPipe, argn, sampleNumber++);
+            processAndPlotData(data, gnuplotPipe, argn, idx);            
         }
     }
 
@@ -89,24 +76,25 @@ int main(int argc, char *argv[]) {
 
     // close shared memory
     // detach it
-    shmdt(shm_rectap_addr);
+    shmdt(shmBuffer);
 
     // close pipe to gnuplot
     pclose(gnuplotPipe);
 
     // exit
+    fprintf(stderr, "TAPPLOT RETS\n");
+    fflush(stderr);
     return 0;
 }
 
 // processAndPlotData function
-void processAndPlotData(char * data){
+void processAndPlotData(char* data, FILE* gnuplotPipe, int argn, int sampleNumber) {
     // Parse the data into name and value
+    for (int i = 0; i < argn; i++) {
+        data = strtok(data, ",");
+    }
     Pair pair;
     parseData(data, &pair);
-
-    // Extract the relevant value for plotting based on the argument argn
-    int argn = 1; // To be changed in main
-    // Example: argn = atoi(argv[1]);
 
     // Here, we assume that argn is the index of the value to be plotted
     char *value = pair.value; // Default value to be plotted
@@ -126,14 +114,15 @@ void processAndPlotData(char * data){
     // Close the file
     fclose(dataFile);
 
-    gnuplot();
+    gnuplot(NULL);
 }
 
-void gnuplot() {
+void gnuplot(void * arg) {
     // Open a pipe to Gnuplot
     FILE *gnuplotPipe = popen("gnuplot", "w");
     if (!gnuplotPipe) {
         fprintf(stderr, "Error opening pipe to Gnuplot");
+        exit(1);
     }
 
     // Gnuplot script
@@ -149,3 +138,7 @@ void gnuplot() {
     pclose(gnuplotPipe);
 }
 
+void parseData(char* data, Pair *outPair) {
+    // up to 99 characters for name, up to 99 characters for value, and up to 1 character for the '='
+    sscanf(data, "%99[^=]=%99[^\n]", outPair->name, outPair->value);
+}

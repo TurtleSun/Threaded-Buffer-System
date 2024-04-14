@@ -1,4 +1,5 @@
 #ifndef BUFFERLIB
+#include <semaphore.h>
 #define BUFFERLIB .H
 
 typedef struct {
@@ -9,6 +10,9 @@ typedef struct {
     // Used only for ring bufs
     int in;
     int out;
+    sem_t * mutex;
+    sem_t * slotsEmptyMutex;
+    sem_t * slotsFullMutex;
     // Used only for async bufs
     int latest;
     int reading;
@@ -16,7 +20,8 @@ typedef struct {
 } Buffer;
 
 //init
-//void initBuffer(Buffer * buf, int argc, char ** argv);
+void createBuffer(key_t key, int shmsize, const char * type, int size);
+Buffer * openBuffer(key_t key, int shmsize);
 
 //writes
 void asyncWrite (Buffer * buffer, char * item);

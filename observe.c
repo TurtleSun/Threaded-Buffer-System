@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <sys/shm.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <semaphore.h>
 #include "bufferLib.h"
 
 //  reads input either from a file or stdin. The input data will be a series of strings, each terminated by a newline either until the end-of-file input or the user types ctrl-d to end the standard input stream. NOTE that ctrl-d (ctrl  and the 'd' key together) sends an EOF signal to the foreground process, so as long as tapper is running, it will not terminate your shell program. 
@@ -30,40 +32,6 @@ struct PairList {
 };
 
 struct PairList pairlist = { .pairs = {0}, .numPairs = 0 };
-
-void initBuffer(Buffer * buf, const char * type, int size) {
-    buf->in = 0;
-    buf->out = 0;
-    buf->size = size;
-    buf->isAsync = 0;
-    buf->latest = 0;
-    buf->reading = 0;
-    buf->slots[0] = 0;
-    buf->slots[1] = 0;
-
-    // convert type to integer
-    if (strcmp(type, "async") == 0) {
-        buf->isAsync = 1;
-        buf->size = 4;
-    } else if (strcmp(type, "sync") == 0) {
-        buf->isAsync = 0;
-        if (size <= 0) {
-            fprintf(stderr, "Invalid size for ring buffer!\n");
-            exit(1);
-        }
-    } else {
-        fprintf(stderr, "Invalid type of buffer!\n");
-        exit(1);
-    }
-
-    // Allocate data pointers in shared memory
-    buf->data = (char**)(buf + 1);  // The data array starts immediately after the Buffer struct
-
-    // Allocate each string in the buffer
-    for (int i = 0; i < buf->size; i++) {
-        buf->data[i] = (char *)(buf->data + buf->size) + i * 100;  // Each string is 100 bytes
-    }
-}
 
 struct PairList updateLastKnown(struct PairList pairlist, char * name, char * newVal) {
     for (int i = 0; i < pairlist.numPairs; i++) {
@@ -97,53 +65,7 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
     }
-    int shm_Id = shmget(KEY, SHMSIZE, 0666);
-    printf("shm_Id: %d\n", shm_Id);
-    if (shm_Id == -1) {
-    // something went horribly wrong        
-    perror("shmget error");
-    exit(1);
-    }
-
-    void * shm_addr = shmat(shm_Id, NULL, 0);
-    printf("shm_addr: %p\n", shm_addr);
-    if (shm_addr == NULL) {
-        // something still went horribly wrong
-        perror("malloc error");
-        exit(1);
-    }
-
-    // cast shared memory to a buffer
-    Buffer *shmBuffer = (Buffer *)shm_addr;
-    printf("shmBuffer: %p\n", shmBuffer);
-
-    // intialize buffer
-    // depending on the buffer type, we need to initialize the buffer differently
-    // check from inputs
-    // Variables for command line arguments
-    char *bufferType = NULL;
-    int bufferSize = 0;
-
-    // Parsing command line arguments
-    int opt;
-    while ((opt = getopt(argc, argv, "b:s:")) != -1) {
-        switch (opt) {
-            case 'b':
-                bufferType = optarg;
-                printf("bufferType: %s\n", bufferType);
-                break;
-            case 's':
-                bufferSize = atoi(optarg);
-                printf("bufferSize: %d\n", bufferSize);
-                break;
-            default:
-                fprintf(stderr, "Usage: %s [-b bufferType] [-s bufferSize]\n", argv[0]);
-                exit(EXIT_FAILURE);
-        }
-    }
-
-    // Initialize the buffer with received type and size
-    initBuffer(shmBuffer, bufferType, bufferSize);
+    Buffer * shmBuffer = openBuffer(KEY, SHMSIZE);
 
     // read and parse from either a file or stdin
     char line[MAX_LINE_LEN];
@@ -151,6 +73,7 @@ int main(int argc, char *argv[]) {
 
     // loop to read from stdin
     while (fgets(line, MAX_LINE_LEN, stdin) != NULL){
+        fprintf(stderr, "OBSERVE GOT LINE %s\n", line);
         // parse the line
         // remove newline character
         line[strcspn(line, "\n")] = 0;
@@ -164,9 +87,10 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
+        // print line
+
         // compare current value with last value, if they are different write value in shared memory
         if(strcmp(getLastKnown(pairlist, name), value) != 0) {
-            printf("Value changed: %s\n", value);
             strcpy(lastValue, value);
             pairlist = updateLastKnown(pairlist, name, value);
             // Write to shared memory
@@ -176,9 +100,12 @@ int main(int argc, char *argv[]) {
             // Prepare the string to write into the buffer
             char bufferData[MAX_LINE_LEN];
             snprintf(bufferData, sizeof(bufferData), "%s=%s", name, value);
+            
             // Write into the buffer based on its type
+            fprintf(stderr, "OBSERVE - Writing to buffer: %s\n", bufferData);
             writeBuffer(shmBuffer, bufferData);
-            printf("Wrote to buffer\n");
+            printf("OBSERVE - Wrote to buffer: %s\n", bufferData);
+            // print whats inside
         }
     }
     // once it is done writing data to the buffer, set the reading flag to 1
@@ -190,8 +117,10 @@ int main(int argc, char *argv[]) {
 
     // close shared memory
     // detach it
-    shmdt(shm_addr);
+    shmdt(shmBuffer);
 
     // exit
+    fprintf(stderr, "OBSERVE RETS\n");
+    fflush(stderr);
     return 0;
 }
