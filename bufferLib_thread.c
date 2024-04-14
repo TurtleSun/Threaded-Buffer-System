@@ -30,7 +30,7 @@ typedef struct {
     char * fd;
 } Parcel;
 
-Parcel initBuffer(char * type, int size, int arg3, char * testFile) {
+Parcel *initBuffer(char * type, int size, int arg3, char * testFile) {
 
     printf("Entered initBuffer\n");
 
@@ -96,7 +96,16 @@ Parcel initBuffer(char * type, int size, int arg3, char * testFile) {
         exit(EXIT_FAILURE);
     }
 
-    Parcel parcel = {.buffer = buf, .arg3 = arg3, .fd = testFile}; 
+    printf("INITBUFF BEFORE PARCEL: testFile :  %s\n", testFile);
+
+    //Parcel * parcel = {.buffer = buf, .arg3 = arg3, .fd = testFile}; 
+    // Init Parcel
+    Parcel * parcel = malloc(sizeof(Parcel));
+    parcel->buffer = buf;
+    parcel->arg3 = arg3;
+    parcel->fd = testFile;
+
+    printf("INITBUFF: parcel.testFile %s\n", parcel->fd);
     printf("Made the parcel\n");
     return parcel;
 }

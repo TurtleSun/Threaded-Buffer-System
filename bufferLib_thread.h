@@ -23,7 +23,7 @@ typedef struct {
 } Parcel;
 
 //init
-Parcel initBuffer(char * type, int size, int arg3, char * testFile);
+Parcel * initBuffer(char * type, int size, int arg3, char * testFile);
 
 //writes
 void asyncWrite (Buffer * buffer, char * item);

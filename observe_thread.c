@@ -65,6 +65,7 @@ void *observe_function(void* arg) {
 
     //printf("Observe BUFF: %p\n", &buffer);
     printf("CHECKING: Observe BUFF ISASYNC: %d\n", buffer.isAsync);
+    printf("CHECKING: Observe BUFF TESTFILE: %s\n", arguemnts->fd);
 
     FILE *fp;
     if(testFile != "1") {
@@ -73,18 +74,22 @@ void *observe_function(void* arg) {
         fp = stdin;
     }
 
+    printf("OBSRVE: CHECKING FILE OPENED");
+
     // read and parse from either a file or stdin
     char line[MAX_LINE_LEN];
     char lastValue[MAX_VALUE_LEN] = {0};
 
     // loop to read from stdin
-    while (fgets(line, MAX_LINE_LEN, stdin) != NULL){
+    while (fgets(line, MAX_LINE_LEN, fp) != NULL){
         // parse the line
         // remove newline character
         line[strcspn(line, "\n")] = 0;
         // split the line into name and value
         char* name = strtok(line, "=");
+        printf("JUST STRTOKED (name): %s\n", name);
         char* value = strtok(NULL, "");
+        printf("JUST STRTOKED (value): %s\n", name);
 
         // if the line is malformed
         if (name == NULL || value == NULL){
@@ -112,7 +117,7 @@ void *observe_function(void* arg) {
             // Write into the buffer based on its type
             writeBuffer(&buffer, bufferData);
             // print whats inside
-            printf("WRITTEN TO BUFFER: %s\n", buffer.data[0]);
+            printf("OBSERVE : WRITTEN TO BUFFER: %s\n", buffer.data[0]);
         }
     }
     // once it is done writing data to the buffer, set the reading flag to 1

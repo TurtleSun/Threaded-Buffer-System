@@ -33,7 +33,7 @@ int num_tasks = 0;
 int buff_size;
 char *tasks[MAX_TASK_SIZE]; // Array to hold task information
 char * testFile;
-Parcel parcel;
+Parcel *parcel;
 
 int main(int argc, char *argv[]) {
     // Parse command line arguments to extract tasks, buffering type, and size
@@ -42,7 +42,6 @@ int main(int argc, char *argv[]) {
 
     // Currently Used Example:
         // ./tappet -t1 observe -t2 reconstruct -t3 tapplot -b async small-test-file
-
     // Initialize buffer
     printf("Just got in main. \n");
     printf("number of arguments: %d\n", argc);
@@ -57,7 +56,7 @@ int main(int argc, char *argv[]) {
         printf("argv %d: %s\n", i+1, argv[i+1]);
         printf("\n");
 
-        if (strstr(argv[i], "-t") != NULL) {
+        if (strcmp(argv[i], "-t") == 0) {
 
             num_tasks = num_tasks + 1;
 
@@ -67,9 +66,11 @@ int main(int argc, char *argv[]) {
             printf("TASK: We've saved %s as tasks: %s\n", argv[i+1], tasks[num_tasks - 1]);
             printf("\n");
 
-        } else if (strstr(argv[i], "-b") != NULL) {
+        } else if (strcmp(argv[i], "-b") == 0) {
 
-            if (!(strstr(argv[i-2], "-t") != NULL)){ // Check if arg3 happens
+            int j = i + 1;
+
+            if (!(strcmp(argv[i-2], "-t") == 0)){ // Check if arg3 happens
 
                 argn = atoi(argv[i-1]);
                 
@@ -79,17 +80,18 @@ int main(int argc, char *argv[]) {
 
             }
 
-            if (strstr(argv[i+1], "async") != NULL) {
+            if (strcmp(argv[j], "async") == 0) {
 
                 buff_size = 4;
 
                 if (i+1 != argc-1){ // async isn't last arg, must be optional test-file
-                    testFile = argv[i+2];
+                    testFile = argv[j+1];
                 } else {
                     testFile = "1";
                 }
 
                 printf("About to initBuff\n");
+                printf("ASYNC BEFORE: We've initBuffer as %s\n", argv[j]);
 
                 parcel = initBuffer("async", buff_size, argn, testFile);
 
@@ -99,8 +101,10 @@ int main(int argc, char *argv[]) {
                 printf("hi?\n");
 
                 // THIS IS WHERE THE SEG FAULT HAPPENS
-                printf("ASYNC: We've initBuffer as %s\n", argv[i+1]);
+                //printf("Trying to find out what wrong: %s\n", argv[i]);
+                //printf("ASYNC AFTER: We've initBuffer as %s\n", argv[j]);
                 printf("This is my saved testFile: %s\n", testFile);
+                printf("This is saved testFile in parcel: %s\n", parcel->fd);
                 printf("\n");
                 break;
 
@@ -135,6 +139,8 @@ int main(int argc, char *argv[]) {
     }
 
     printf("Just finished parsing args...\n");
+
+    printf("This is outside loop testFile in parcel: %s\n", parcel->fd);
 
     // Create threads for each task
     pthread_t threads[num_tasks];
