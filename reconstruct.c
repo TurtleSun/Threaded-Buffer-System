@@ -66,10 +66,6 @@ int main(int argc, char *argv[]) {
     // initialize a pair to hold the parsed data
     Pair parsedData;
 
-    // Initialize the buffer with received type and size
-    //initBuffer(obsrecBuffer, bufferType, bufferSize);
-    initBuffer(rectapBuffer, bufferType, bufferSize);
-
     ///////////////////// READING FROM OBSERVE
     // read from shared memory between observe and reconstruct and reconstruct the data logic in separate function
     // while reading flag is 0 then the data is not ready to read
@@ -84,7 +80,6 @@ int main(int argc, char *argv[]) {
         if (strcmp(dataObs, "END_OF_DATA_YEET") == 0) {
             break;
         }
-        printf("Data: %s\n", dataObs);
         if (dataObs != NULL) {
             parseData(dataObs, &parsedData);
             if (strcmp(knownValues.endName, "") == 0 && nameInKnownVals(&knownValues, parsedData.name) == 1) {
@@ -179,7 +174,7 @@ void parseData(const char* data, Pair* outPair) {
 void updateLastKnownValues(Pair* newPair, KnownValues* knownValues) {
     int unique = 0;
     // for each known value
-    for (int i = 0; i < knownValues->pairs[i].count; ++i) {
+    for (int i = 0; i < knownValues->count; ++i) {
         // if the new name is found in the list of known values, update the value
         if (strcmp(knownValues->pairs[i].name, newPair->name) == 0) {
             strcpy(knownValues->pairs[i].value, newPair->value);
