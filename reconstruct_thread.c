@@ -43,10 +43,10 @@ int nameInKnownVals(KnownValues *values, char * name);
 void *reconstruct_function(void *arg){
     printf("Reconstruct thread made!\n");
     Parcel *arguemnts = (Parcel *)arg;
-    Buffer buffer = arguemnts->buffer;
+    Buffer *buffer = arguemnts->buffer;
 
     //printf("Reconstruct BUFF: %p\n", &buffer);
-    printf("CHECKING: Reconstruct BUFF ISASYNC: %d\n", buffer.isAsync);
+    printf("CHECKING: Reconstruct BUFF ISASYNC: %d\n", buffer->isAsync);
 
     KnownValues knownValues = {0};
     // char array to hold the data
@@ -56,7 +56,7 @@ void *reconstruct_function(void *arg){
 
     while (1){
         //fprintf(stderr, "IM TRYING TO READ\n");
-        char* dataObs = readBuffer(&buffer);
+        char* dataObs = readBuffer(buffer);
         //fprintf(stderr, "I READ SOMETHING\n");
         // check for END marker symbolizing no more data to read
         if (strcmp(dataObs, "END_OF_DATA") == 0) {
@@ -70,7 +70,7 @@ void *reconstruct_function(void *arg){
             if (strcmp(knownValues.endName, "") == 0 && nameInKnownVals(&knownValues, parsedData.name) == 1) {
                 char sample[100];
                 compileSample(&knownValues, sample); 
-                writeBuffer(&buffer, sample);
+                writeBuffer(buffer, sample);
                 fprintf(stderr, "RECONSTRUCT - Wrote to buffer: %s\n", sample);
             }
             updateLastKnownValues(&parsedData, &knownValues);
@@ -79,7 +79,7 @@ void *reconstruct_function(void *arg){
             if (strcmp(parsedData.name, knownValues.endName) == 0) {
                 char sample[100];
                 compileSample(&knownValues, sample);
-                writeBuffer(&buffer, sample);
+                writeBuffer(buffer, sample);
                 fprintf(stderr, "RECONSTRUCT - Wrote to buffer: %s\n", sample);  
             }
         }
@@ -87,7 +87,7 @@ void *reconstruct_function(void *arg){
 
     // write into the buffer, at the very end, the end marker
     // end of data yeet bc i dont think this will be part of the values we are observing
-    writeBuffer(&buffer, "END_OF_DATA");
+    writeBuffer(buffer, "END_OF_DATA");
     fprintf(stderr, "RECONSTRUCT - Wrote to buffer: END_OF_DATA\n");
 
     pthread_exit(NULL);

@@ -17,13 +17,13 @@ typedef struct {
 
 
 typedef struct {
-    Buffer buffer;
+    Buffer *buffer;
     int arg3;
     char * fd;
 } Parcel;
 
 //init
-Parcel * initBuffer(char * type, int size, int arg3, char * testFile);
+void initBuffer(char * type, int size, int arg3, char * testFile, Parcel * parcel);
 
 //writes
 void asyncWrite (Buffer * buffer, char * item);

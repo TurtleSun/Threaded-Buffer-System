@@ -93,16 +93,16 @@ int main(int argc, char *argv[]) {
                 printf("About to initBuff\n");
                 printf("ASYNC BEFORE: We've initBuffer as %s\n", argv[j]);
 
-                parcel = initBuffer("async", buff_size, argn, testFile);
+                initBuffer("async", buff_size, argn, testFile, parcel);
 
                 printf("Came back from initBuff\n");
 
                 printf("\n");
-                printf("hi?\n");
 
                 // THIS IS WHERE THE SEG FAULT HAPPENS
                 //printf("Trying to find out what wrong: %s\n", argv[i]);
-                //printf("ASYNC AFTER: We've initBuffer as %s\n", argv[j]);
+                printf("ASYNC AFTER: We've initBuffer as %s\n", argv[j]);
+
                 printf("This is my saved testFile: %s\n", testFile);
                 printf("This is saved testFile in parcel: %s\n", parcel->fd);
                 printf("\n");
@@ -127,7 +127,8 @@ int main(int argc, char *argv[]) {
                     testFile = argv[j+1];
                 }
                 
-                parcel = initBuffer("sync", buff_size, argn, testFile);
+                initBuffer("sync", buff_size, argn, testFile, parcel);
+                //parcel = initBuffer("sync", buff_size, argn, testFile);
 
                 printf("\n");
                 printf("SYNC: We've initBuffer as %s\n", argv[i+1]);
@@ -148,14 +149,14 @@ int main(int argc, char *argv[]) {
         char *task_name = tasks[i];
 
         if (strcmp(task_name, "observe") == 0){
-            pthread_create(&threads[i], NULL, observe_function, (void *)&parcel);
+            pthread_create(&threads[i], NULL, observe_function, parcel);
         } else if (strcmp(task_name, "reconstruct") == 0){
-            pthread_create(&threads[i], NULL, reconstruct_function, (void *)&parcel);
+            pthread_create(&threads[i], NULL, reconstruct_function, parcel);
         } else if (strcmp(task_name, "tapplot") == 0){
-            pthread_create(&threads[i], NULL, tapplot_function, (void *)&parcel);
+            pthread_create(&threads[i], NULL, tapplot_function, parcel);
         } else {
             printf("SOMETHING WRONG HAPPENED\n");
-            pthread_create(&threads[i], NULL, task_function, (void *)&parcel);
+            pthread_create(&threads[i], NULL, task_function, parcel);
         }
 
     }

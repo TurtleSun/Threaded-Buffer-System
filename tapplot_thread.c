@@ -13,11 +13,11 @@ void gnuplot(void * arg);
 void *tapplot_function(void *arg){
     printf("Tapplot thread made! \n");
     Parcel *arguemnts = (Parcel *)arg;
-    Buffer buffer = arguemnts->buffer;
+    Buffer *buffer = arguemnts->buffer;
     int arg3 = arguemnts->arg3;
 
     //printf("Observe BUFF: %p\n", &buffer);
-    printf("CHECKING: Tapplot BUFF ISASYNC: %d\n", buffer.isAsync);
+    printf("CHECKING: Tapplot BUFF ISASYNC: %d\n", buffer->isAsync);
 
 // Open a pipe to gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
@@ -38,7 +38,7 @@ void *tapplot_function(void *arg){
     int idx = -1;
     while (1){
         idx++;
-        char* data = readBuffer(&buffer);
+        char* data = readBuffer(buffer);
         printf("TAPPLOT: Here is what the buffer game me: %s\n", data);
         // check for END marker symbolizing no more data to read
         if (strcmp(data, "END_OF_DATA") == 0) {

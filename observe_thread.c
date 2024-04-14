@@ -60,11 +60,11 @@ void *observe_function(void* arg) {
     }
 
     Parcel *arguemnts = (Parcel *)arg;
-    Buffer buffer = arguemnts->buffer;
+    Buffer *buffer = arguemnts->buffer;
     char * testFile = arguemnts->fd;
 
     //printf("Observe BUFF: %p\n", &buffer);
-    printf("CHECKING: Observe BUFF ISASYNC: %d\n", buffer.isAsync);
+    printf("CHECKING: Observe BUFF ISASYNC: %d\n", buffer->isAsync);
     printf("CHECKING: Observe BUFF TESTFILE: %s\n", arguemnts->fd);
 
     FILE *fp;
@@ -115,15 +115,13 @@ void *observe_function(void* arg) {
             
             printf("bufferData: %s\n", bufferData);
             // Write into the buffer based on its type
-            writeBuffer(&buffer, bufferData);
+            writeBuffer(buffer, bufferData);
             // print whats inside
-            printf("OBSERVE : WRITTEN TO BUFFER: %s\n", buffer.data[0]);
+            printf("OBSERVE : WRITTEN TO BUFFER: %s\n", buffer->data[0]);
         }
     }
-    // once it is done writing data to the buffer, set the reading flag to 1
-    buffer.reading = 1;
 
-    writeBuffer(&buffer, "END_OF_DATA");
+    writeBuffer(buffer, "END_OF_DATA");
 
     if (testFile != NULL){
         fclose(fp);
