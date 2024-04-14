@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "bufferLib_thread.h"
+#include <pthread.h>
 
 //  reads input either from a file or stdin. The input data will be a series of strings, each terminated by a newline either until the end-of-file input or the user types ctrl-d to end the standard input stream. NOTE that ctrl-d (ctrl  and the 'd' key together) sends an EOF signal to the foreground process, so as long as tapper is running, it will not terminate your shell program. 
 // Each string input to P1 will be of the form:
@@ -49,15 +50,24 @@ char * getLastKnown(struct PairList pairlist, char * name) {
 void *observe_function(void* arg) {
     printf("Observe thread made!\n");
 
+    for (int i = 0; i < 10; i++) {
+        pairlist.pairs[i].name = malloc(100);
+        pairlist.pairs[i].value = malloc(100);
+        if (pairlist.pairs[i].name == NULL || pairlist.pairs[i].value == NULL) {
+            fprintf(stderr, "malloc error");
+            exit(1);
+        }
+    }
+
     Parcel *arguemnts = (Parcel *)arg;
     Buffer buffer = arguemnts->buffer;
     char * testFile = arguemnts->fd;
 
     //printf("Observe BUFF: %p\n", &buffer);
-    //printf("Observe BUFF ISASYNC: %d\n", buffer.isAsync);
+    printf("CHECKING: Observe BUFF ISASYNC: %d\n", buffer.isAsync);
 
     FILE *fp;
-    if(testFile != NULL) {
+    if(testFile != "1") {
         fp = fopen(testFile, "r");
     }else {
         fp = stdin;
@@ -107,8 +117,7 @@ void *observe_function(void* arg) {
     }
     // once it is done writing data to the buffer, set the reading flag to 1
     buffer.reading = 1;
-    // write into the buffer, at the very end, the end marker
-    // end of data yeet bc i dont think this will be part of the values we are observing
+
     writeBuffer(&buffer, "END_OF_DATA");
 
     if (testFile != NULL){

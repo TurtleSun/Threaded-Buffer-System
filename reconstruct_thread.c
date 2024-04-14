@@ -5,6 +5,7 @@
 #include <sys/mman.h>
 #include "bufferLib_thread.h"
 #include <unistd.h>
+#include <pthread.h>
 
 #define MAX_PAIRS 100
 #define MAX_NAME_LEN 50
@@ -32,82 +33,75 @@ typedef struct {
     char endName[100];
 } KnownValues;
 
-typedef struct {
-    // holds pairs for a single sample
-    Pair pairs[MAX_UNIQUE_NAMES];
-    // number of pairs in this sample
-    int pairCount;
-} Sample;
-
-typedef struct {
-    // array to hold samples
-    Sample samples[MAX_SAMPLE_SIZE];
-    // current number of samples
-    int sampleCount;
-} Samples;
-
 // Function declarations
 void parseData(const char* data, Pair* outPair);
 void updateLastKnownValues(Pair* newPair, KnownValues* knownValues);
-int shouldCompileSample(Pair* newPair, KnownValues* knownValues);
 void findEndName(KnownValues *values);
 void compileSample(KnownValues* knownValues, char* outSample);
-void addSample(Samples* samples, KnownValues* knownValues);
+int nameInKnownVals(KnownValues *values, char * name);
 
 void *reconstruct_function(void *arg){
-    printf("Reconstruct thread made!");
+    printf("Reconstruct thread made!\n");
     Parcel *arguemnts = (Parcel *)arg;
     Buffer buffer = arguemnts->buffer;
 
     //printf("Reconstruct BUFF: %p\n", &buffer);
-    //printf("Reconstruct BUFF ISASYNC: %d\n", buffer.isAsync);
+    printf("CHECKING: Reconstruct BUFF ISASYNC: %d\n", buffer.isAsync);
 
-    // initialize known values struct to hold the last known values
     KnownValues knownValues = {0};
     // char array to hold the data
     char data[MAX_LINE_LENGTH];
     // initialize a pair to hold the parsed data
     Pair parsedData;
 
-    ///////////////////// READING FROM OBSERVE
-    // read from shared memory between observe and reconstruct and reconstruct the data logic in separate function
-    // while reading flag is 0 then the data is not ready to read
-    while (!buffer.reading) {
-        // sleep briefly
-        usleep(1000);
-    }
-
-    Samples samples = {0};
-
-    // reading from the buffer 
-    // process data from obsrecBuffer, data observe wrote
     while (1){
+        //fprintf(stderr, "IM TRYING TO READ\n");
         char* dataObs = readBuffer(&buffer);
+        //fprintf(stderr, "I READ SOMETHING\n");
         // check for END marker symbolizing no more data to read
         if (strcmp(dataObs, "END_OF_DATA") == 0) {
             break;
         }
-        if (dataObs != NULL) {
+        if (dataObs != NULL || strstr(dataObs, "=") != NULL) {
+
+            printf("RECONSTRUCT : Here is dataObs: %s\n", dataObs);
+
             parseData(dataObs, &parsedData);
+            if (strcmp(knownValues.endName, "") == 0 && nameInKnownVals(&knownValues, parsedData.name) == 1) {
+                char sample[100];
+                compileSample(&knownValues, sample); 
+                writeBuffer(&buffer, sample);
+                fprintf(stderr, "RECONSTRUCT - Wrote to buffer: %s\n", sample);
+            }
             updateLastKnownValues(&parsedData, &knownValues);
-            findEndName(&knownValues);
+            //findEndName(&knownValues);
             // if we have found the end name, compile the sample
             if (strcmp(parsedData.name, knownValues.endName) == 0) {
-                char sample[MAX_SAMPLE_SIZE];
+                char sample[100];
                 compileSample(&knownValues, sample);
-                printf("There is the sample: %s\n", sample);  
                 writeBuffer(&buffer, sample);
+                fprintf(stderr, "RECONSTRUCT - Wrote to buffer: %s\n", sample);  
             }
         }
     }
 
-    // once it is done writing data to the buffer, set the reading flag to 1
-    buffer.reading = 1;
     // write into the buffer, at the very end, the end marker
     // end of data yeet bc i dont think this will be part of the values we are observing
     writeBuffer(&buffer, "END_OF_DATA");
+    fprintf(stderr, "RECONSTRUCT - Wrote to buffer: END_OF_DATA\n");
 
     pthread_exit(NULL);
+}
+
+int nameInKnownVals(KnownValues *myValues, char * name) {
+    for (int i = 0; i < myValues->count; i++) {
+        if (strcmp(myValues->pairs[i].name, name) == 0) {
+            int test = 0;
+            strcpy(myValues->endName, myValues->pairs[myValues->count-1].name);
+            return 1;
+        }
+    }
+    return 0;
 }
 
 // parseData function
@@ -133,69 +127,13 @@ void updateLastKnownValues(Pair* newPair, KnownValues* knownValues) {
     }
     // if the name is not found in the list of known values, add it
     if (!unique && knownValues->count < MAX_PAIRS) {
-        Pair selectedPair = knownValues->pairs[knownValues->count];
-        strcpy(selectedPair.name, newPair->name);
-        strcpy(selectedPair.value, newPair->value);
+        strcpy(knownValues->pairs[knownValues->count].name, newPair->name);
+        strcpy(knownValues->pairs[knownValues->count].value, newPair->value);
         knownValues->pairs[knownValues->count].count = 1;
         knownValues->count++;
     }
 }
 
-// findEndName function
-// checks if the name is the end name
-// this way we can check when a sample is "completed" to be compiled
-void findEndName(KnownValues *values) {
-    // go through the values in KnownValues
-    // find the first value whose count is nonzer (repeated)
-    // end value is the name before it
-    if (values->count > 0) {
-        strcpy(values->endName, values->pairs[values->count - 1].name);
-    }
-
-}
-
-// isEndName function
-// checks if the name is the end name
-int isEndName(const char* name, KnownValues *values) {
-    return strcmp(name, values->endName) == 0;
-}
-
-// compileSample function
-// compiles the sample from the known values and end name
-
-
-// addSample function
-// adds a sample to the samples struct
-void addSample(Samples* samples, KnownValues* knownValues) {
-    if (samples->sampleCount >= MAX_SAMPLE_SIZE) {
-        // No more space for samples
-        return;
-    }
-    
-    Sample* newSample = &samples->samples[samples->sampleCount++];
-    // initialize the pair count for the new sample
-    newSample->pairCount = 0;
-    
-    // Copy data from knownValues to the newSample
-    for (int i = 0; i < knownValues->count; i++) {
-        strcpy(newSample->pairs[i].name, knownValues->pairs[i].name);
-        strcpy(newSample->pairs[i].value, knownValues->pairs[i].value);
-        newSample->pairCount++;
-    }
-}
-
-// shouldCompileSample function
-// checks if the sample should be compiled
-int shouldCompileSample(Pair* newPair, KnownValues* knownValues) {
-    // if the new pair is the end name, compile the sample
-    if (isEndName(newPair->name, knownValues)) {
-        return 1;
-    }
-    return 0;
-}
-
-// compileSample function
-// compiles the sample from the known values and end name
 void compileSample(KnownValues *values, char sample[]) {
     // Initialize the sample string
     sample[0] = '\0'; // Ensure the string is empty initially

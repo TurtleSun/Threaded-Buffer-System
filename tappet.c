@@ -6,7 +6,7 @@
 #include "bufferLib_thread.h"
 #include "observe_thread.h"
 #include "reconstruct_thread.h"
-//#include "tapplot_thread.h"
+#include "tapplot_thread.h"
 
 #define MAX_TASK_SIZE 1024
 #define MAX_NAME_LEN 50
@@ -27,7 +27,6 @@ typedef struct {
 
 // Function prototypes
 void * task_function(void *arg);
-void *tapplot_function(void *arg);
 
 // Define global variables for synchronization
 int num_tasks = 0;
@@ -40,6 +39,9 @@ int main(int argc, char *argv[]) {
     // Parse command line arguments to extract tasks, buffering type, and size
     // Example: tappet -t1 observe -t2 reconstruct -t3 tapplot <optional arg3> -b async <optional testFile> 
                             // and if -b sync -s <optional buffer_size>
+
+    // Currently Used Example:
+        // ./tappet -t1 observe -t2 reconstruct -t3 tapplot -b async small-test-file
 
     // Initialize buffer
     printf("Just got in main. \n");
@@ -77,8 +79,6 @@ int main(int argc, char *argv[]) {
 
             }
 
-            printf("Do I get here? \n");
-
             if (strstr(argv[i+1], "async") != NULL) {
 
                 buff_size = 4;
@@ -86,11 +86,19 @@ int main(int argc, char *argv[]) {
                 if (i+1 != argc-1){ // async isn't last arg, must be optional test-file
                     testFile = argv[i+2];
                 } else {
-                    testFile = stdin;
+                    testFile = "1";
                 }
-                parcel = initBuffer("async", buff_size, 1, testFile);
+
+                printf("About to initBuff\n");
+
+                parcel = initBuffer("async", buff_size, argn, testFile);
+
+                printf("Came back from initBuff\n");
 
                 printf("\n");
+                printf("hi?\n");
+
+                // THIS IS WHERE THE SEG FAULT HAPPENS
                 printf("ASYNC: We've initBuffer as %s\n", argv[i+1]);
                 printf("This is my saved testFile: %s\n", testFile);
                 printf("\n");
@@ -102,20 +110,20 @@ int main(int argc, char *argv[]) {
 
                 if (j == argc -1) { // sync is the last argument
                     buff_size = 1;
-                    testFile = stdin;
+                    testFile = "1";
                 } else if (strstr(argv[j], "-s")) { // there is optional size arg
                     buff_size = atoi(argv[j+1]);
                     if (j+1 != argc-1){ // size is not last arg
                         // must be test-file
                         testFile = argv[j+2];
                     } else {
-                        testFile = stdin;
+                        testFile = "1";
                     }
                 } else { // no optinal size then must be optional test-file
                     testFile = argv[j+1];
                 }
                 
-                parcel = initBuffer("sync", buff_size, 1, testFile);
+                parcel = initBuffer("sync", buff_size, argn, testFile);
 
                 printf("\n");
                 printf("SYNC: We've initBuffer as %s\n", argv[i+1]);
@@ -174,7 +182,6 @@ int main(int argc, char *argv[]) {
 // Function executed by each thread
 void *task_function(void *arg) {
     char *command = arg;
-
     // Execute shell command using system()
     system(command);
 
@@ -299,7 +306,7 @@ void *task_function(void *arg) {
     pthread_exit(NULL);
 } */
 
-void *tapplot_function(void *arg){
+/* void *tapplot_function(void *arg){
     printf("Tapplot thread made!");
     Parcel *arguemnts = (Parcel *)arg;
     Buffer buffer = arguemnts->buffer;
@@ -337,7 +344,7 @@ void *tapplot_function(void *arg){
 
     pthread_exit(NULL);
 }
-
+ */
 /* // OBSERVE FUNCTIONS
 struct PairList updateLastKnown(struct PairList pairlist, char * name, char * newVal) {
     for (int i = 0; i < pairlist.numPairs; i++) {
@@ -425,7 +432,7 @@ void compileSample(KnownValues *values, char sample[]) {
     }
 }
  */
-void processAndPlotData(char * data, int index){
+/* void processAndPlotData(char * data, int index){
     // Parse the data into name and value
     Pair pair;
     parseData(data, &pair);
@@ -474,5 +481,5 @@ void gnuplot(void * arg) {
 
     // Close the pipe
     pclose(gnuplotPipe);
-}
+} */
 

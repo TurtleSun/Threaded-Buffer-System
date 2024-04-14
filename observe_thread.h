@@ -16,6 +16,6 @@ struct PairList {
     int numPairs;
 };
 
-struct PairList updateLastKnown(struct PairList pairlist, char * name, char * newVal);
-char * getLastKnown(struct PairList pairlist, char * name);
+//struct PairList updateLastKnown(struct PairList pairlist, char * name, char * newVal);
+//char * getLastKnown(struct PairList pairlist, char * name);
 void *observe_function(void* arg);

@@ -1,4 +1,4 @@
-#ifndef BUFFERLIB
+/* #ifndef BUFFERLIB
 #define BUFFERLIB .H
 
 typedef struct {
@@ -30,4 +30,4 @@ char * ringRead (Buffer * buffer);
 char * readBuffer (Buffer * buffer);
 void writeBuffer (Buffer * buffer, char * item);
 
-#endif
+#endif */

@@ -22,37 +22,6 @@ typedef struct {
     int count;
 } Pair;
 
-// array to hold the last known values
-//Pair lastKnownValues[MAX_UNIQUE_NAMES];
-//int uniqueNames = 0;
-
-typedef struct {
-    Pair pairs[MAX_UNIQUE_NAMES];
-    // extra field to hold the count of unique names
-    int count;
-    // extra field to hold the end name
-    char endName[100];
-} KnownValues;
-
-typedef struct {
-    // holds pairs for a single sample
-    Pair pairs[MAX_UNIQUE_NAMES];
-    // number of pairs in this sample
-    int pairCount;
-} Sample;
-
-typedef struct {
-    // array to hold samples
-    Sample samples[MAX_SAMPLE_SIZE];
-    // current number of samples
-    int sampleCount;
-} Samples;
-
 // Function declarations
-void parseData(const char* data, Pair* outPair);
-void updateLastKnownValues(Pair* newPair, KnownValues* knownValues);
-int shouldCompileSample(Pair* newPair, KnownValues* knownValues);
-void findEndName(KnownValues *values);
-void compileSample(KnownValues* knownValues, char* outSample);
-void addSample(Samples* samples, KnownValues* knownValues);
 void *reconstruct_function(void *arg);
+void parseData(const char* data, Pair* outPair);
