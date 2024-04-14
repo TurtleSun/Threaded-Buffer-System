@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <semaphore.h>
-#include "bufferLib.h"
+#include "bufferLibSimplified.h"
 
 //  reads input either from a file or stdin. The input data will be a series of strings, each terminated by a newline either until the end-of-file input or the user types ctrl-d to end the standard input stream. NOTE that ctrl-d (ctrl  and the 'd' key together) sends an EOF signal to the foreground process, so as long as tapper is running, it will not terminate your shell program. 
 // Each string input to P1 will be of the form:
@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
     }
-    Buffer * shmBuffer = openBuffer(KEY, SHMSIZE);
+    Buffer * shmBuffer = openBuffer(KEY);
 
     // read and parse from either a file or stdin
     char line[MAX_LINE_LEN];
@@ -103,16 +103,14 @@ int main(int argc, char *argv[]) {
             
             // Write into the buffer based on its type
             fprintf(stderr, "OBSERVE - Writing to buffer: %s\n", bufferData);
-            writeBuffer(shmBuffer, bufferData);
+            ringWrite(shmBuffer, bufferData);
             printf("OBSERVE - Wrote to buffer: %s\n", bufferData);
             // print whats inside
         }
     }
-    // once it is done writing data to the buffer, set the reading flag to 1
-    shmBuffer->reading = 1;
     // write into the buffer, at the very end, the end marker
     // end of data yeet bc i dont think this will be part of the values we are observing
-    writeBuffer(shmBuffer, "END_OF_DATA_YEET");
+    ringWrite(shmBuffer, "END_OF_DATA_YEET");
 
     // close shared memory
     // detach it

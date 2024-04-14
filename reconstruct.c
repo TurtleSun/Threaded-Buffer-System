@@ -9,7 +9,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/shm.h>
-#include "bufferLib.h"
+#include "bufferLibSimplified.h"
 #include <unistd.h>
 #include <stdbool.h>
 #include <fcntl.h>
@@ -56,8 +56,8 @@ int nameInKnownVals(KnownValues *values, char * name);
 
 int main(int argc, char *argv[]) {
     // open shared memory that we initialized in tapper between observe and reconstruct
-    Buffer * obsrecBuffer = openBuffer(OBSERVE_KEY, SHMSIZE);
-    Buffer * rectapBuffer = openBuffer(PLOT_KEY, SHMSIZE);
+    Buffer * obsrecBuffer = openBuffer(OBSERVE_KEY);
+    Buffer * rectapBuffer = openBuffer(PLOT_KEY);
 
     // initialize known values struct to hold the last known values
     KnownValues knownValues = {0};
@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
     // process data from obsrecBuffer, data observe wrote
     while (true){
         fprintf(stderr, "IM TRYING TO READ\n");
-        char* dataObs = readBuffer(obsrecBuffer);
+        char* dataObs = ringRead(obsrecBuffer);
         fprintf(stderr, "I READ SOMETHING\n");
         // check for END marker symbolizing no more data to read
         if (strcmp(dataObs, "END_OF_DATA_YEET") == 0) {
@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
             if (strcmp(knownValues.endName, "") == 0 && nameInKnownVals(&knownValues, parsedData.name) == 1) {
                 char sample[100];
                 compileSample(&knownValues, sample); 
-                writeBuffer(rectapBuffer, sample);
+                ringWrite(rectapBuffer, sample);
                 fprintf(stderr, "RECONSTRUCT - Wrote to buffer: %s\n", sample);
             }
             updateLastKnownValues(&parsedData, &knownValues);
@@ -94,7 +94,7 @@ int main(int argc, char *argv[]) {
             if (strcmp(parsedData.name, knownValues.endName) == 0) {
                 char sample[100];
                 compileSample(&knownValues, sample);
-                writeBuffer(rectapBuffer, sample);
+                ringWrite(rectapBuffer, sample);
                 fprintf(stderr, "RECONSTRUCT - Wrote to buffer: %s\n", sample);  
             }
         }
@@ -102,7 +102,7 @@ int main(int argc, char *argv[]) {
 
     // write into the buffer, at the very end, the end marker
     // end of data yeet bc i dont think this will be part of the values we are observing
-    writeBuffer(rectapBuffer, "END_OF_DATA_YEET");
+    ringWrite(rectapBuffer, "END_OF_DATA_YEET");
     fprintf(stderr, "RECONSTRUCT - Wrote to buffer: END_OF_DATA_YEET\n");
 
     // Detach from shared memory segments
@@ -113,43 +113,6 @@ int main(int argc, char *argv[]) {
     fflush(stderr);
     return 0;
 }
-
-/*void initBuffer(Buffer * buf, const char * type, int size) {
-    buf->in = 0;
-    buf->out = 0;
-    buf->size = size;
-    buf->isAsync = 0;
-    buf->latest = 0;
-    buf->reading = 0;
-    buf->slots[0] = 0;
-    buf->slots[1] = 0;
-
-    // convert type to integer
-    if (strcmp(type, "async") == 0) {
-        buf->isAsync = 1;
-        buf->size = 4;
-    } else if (strcmp(type, "sync") == 0) {
-        buf->isAsync = 0;
-        if (size <= 0) {
-            fprintf(stderr, "Invalid size for ring buffer!\n");
-            exit(1);
-        }
-        buf->mutex = sem_open("mutex", O_CREAT, 0644, 1);
-        buf->slotsEmptyMutex = sem_open("slotsEmptyMutex", O_CREAT, 0644, size);
-        buf->slotsFullMutex = sem_open("slotsFullMutex", O_CREAT, 0644, 0);
-    } else {
-        fprintf(stderr, "Invalid type of buffer!\n");
-        exit(1);
-    }
-
-    // Allocate data pointers in shared memory
-    buf->data = (char**)(buf + 1);  // The data array starts immediately after the Buffer struct
-
-    // Allocate each string in the buffer
-    for (int i = 0; i < buf->size; i++) {
-        buf->data[i] = (char *)buf->data + buf->size * sizeof(char*) + i * 100;  // Each string is 100 bytes
-    }
-}*/
 
 int nameInKnownVals(KnownValues *myValues, char * name) {
     for (int i = 0; i < myValues->count; i++) {
@@ -191,20 +154,6 @@ void updateLastKnownValues(Pair* newPair, KnownValues* knownValues) {
         knownValues->count++;
     }
 }
-
-// findEndName function
-// checks if the name is the end name
-// this way we can check when a sample is "completed" to be compiled
-/*void findEndName(KnownValues *myValues) {
-    // go through the values in KnownValues
-    // find the first value whose count is nonzer (repeated)
-    // end value is the name before it
-    for (int i = 0; i < myValues->count; i++) {
-        if (myValues->pairs[i].count > 1) {
-            strcpy(myValues->endName, myValues->pairs[myValues->count - 1].name);
-        }
-    }
-}*/
 
 // compileSample function
 // compiles the sample from the known values and end name

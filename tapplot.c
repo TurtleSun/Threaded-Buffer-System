@@ -6,7 +6,7 @@
 #include <sys/mman.h>
 #include <sys/shm.h>
 #include <stdio.h>
-#include "bufferLib.h"
+#include "bufferLibSimplified.h"
 #include <unistd.h>
 #include <stdbool.h>
 
@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    Buffer * shmBuffer = openBuffer(PLOT_KEY, SHMSIZE);
+    Buffer * shmBuffer = openBuffer(PLOT_KEY);
 
     // Open a pipe to gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
     int idx = -1;
     while (1){
         idx++;
-        char* data = readBuffer(shmBuffer);
+        char* data = ringRead(shmBuffer);
         // check for END marker symbolizing no more data to read
         if (strcmp(data, "END_OF_DATA") == 0) {
             break;
@@ -90,8 +90,9 @@ int main(int argc, char *argv[]) {
 // processAndPlotData function
 void processAndPlotData(char* data, FILE* gnuplotPipe, int argn, int sampleNumber) {
     // Parse the data into name and value
-    for (int i = 0; i < argn; i++) {
-        data = strtok(data, ",");
+    data = strtok(data, ",");
+    for (int i = 1; i < argn; i++) {
+        data = strtok(NULL, ",");
     }
     Pair pair;
     parseData(data, &pair);

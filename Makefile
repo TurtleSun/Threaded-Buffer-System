@@ -13,14 +13,15 @@ clean:
 	rm -rf $(PROGS) *.o
 	-bash ./clearIPCS.sh
 
-tapper:
-	gcc -g -pthread tapper.c -o tapper bufferLib.c
+tapper: tapper.c bufferLibSimplified.c
+	gcc -g -pthread tapper.c -o tapper bufferLibSimplified.c
 
-observe:
-	gcc -g -pthread -o observe observe.c bufferLib.c
+observe: observe.c bufferLibSimplified.c
+	gcc -g -pthread -o observe observe.c bufferLibSimplified.c
 
-reconstruct:
-	gcc -g -pthread -o reconstruct reconstruct.c bufferLib.c
+reconstruct: reconstruct.c bufferLibSimplified.c
+	gcc -g -pthread -o reconstruct reconstruct.c bufferLibSimplified.c
 
-tapplot:
-	gcc -g -pthread -o tapplot tapplot.c bufferLib.c
+tapplot: tapplot.c bufferLibSimplified.c
+	gcc -g -pthread -o tapplot tapplot.c bufferLibSimplified.c
+

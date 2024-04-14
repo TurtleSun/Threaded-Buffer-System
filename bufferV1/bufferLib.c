@@ -9,6 +9,8 @@
 #include <semaphore.h>
 #include <fcntl.h>
 
+#define DELAY 1
+
 typedef struct {
     // Used for all bufs
     char ** data;
@@ -132,13 +134,13 @@ Buffer * openBuffer(key_t key, int shmsize) {
     }
     Buffer * buf = (Buffer *)shmAddr;
 
-    int mutexID = shmget(key - 1, sizeof(sem_t) * 3, 0666);
-    if (mutexID == -1) {
-        perror("shmget error");
-        exit(1);
-    }
-
     if (buf->isAsync == 0) {
+        int mutexID = shmget(key - 1, sizeof(sem_t) * 3, 0666);
+        if (mutexID == -1) {
+            perror("shmget error");
+            exit(1);
+        }
+
         void * mutexAddr = shmat(mutexID, NULL, 0);
         if (mutexAddr == (void *)-1) {
             perror("shmat error");
@@ -190,6 +192,7 @@ void asyncWrite (Buffer * buffer, char * item) {
   strncpy(buffer->data[index + (2*pair)], item, 99); // Copy item to data slot. Hardcoded # bytes
   buffer->slots[pair] = index; // Indicates latest data within selected pair.
   buffer->latest = pair; // Indicates pair containing latest data.
+  sleep(DELAY);
 }
 
 char * asyncRead (Buffer * buffer) {
@@ -203,6 +206,7 @@ char * asyncRead (Buffer * buffer) {
     buffer->reading = pair; // Update reading variable to show which pair the reader is reading from.
     index = buffer->slots[pair]; // Get index of pairing to read from
     strncpy(result, buffer->data[index + (2*pair)], 99); // Get desired value from the most recently updated pair.
+    sleep(DELAY);
     return result;
 }
 

@@ -9,7 +9,7 @@
 #include <sys/types.h>
 #include <sys/shm.h>
 #include <stdbool.h>
-#include "bufferLib.h"
+#include "bufferLibSimplified.h"
 
 #define SHMSIZE 100000
 
@@ -38,11 +38,11 @@ int main(int argc, char *argv[]){
     // number of processes is 3: p1 observe, p2 reconstruct, p3 tapplot
     int bufSize = atoi(bufferInfo.bufferSize);
     for (int i = 0; i < num_processes - 1; i++) {
-        createBuffer(keys[i], SHMSIZE, bufferInfo.isAsync, bufSize);
+        createBuffer(keys[i], bufferInfo.isAsync, bufSize);
     }
 
     // default arg number for tapplot
-    char argnValue[10] = "1";
+    char argnValue[10] = "2";
 
     // execute process
     // observe, reconstruct, tapplot
@@ -91,16 +91,12 @@ int main(int argc, char *argv[]){
 }
 
 void parse_args(int argc, char *argv[]){
-    //if (argc != 2){
-      //  printf("Please specify an input file!\n");
-        //exit(1);
-    //}
 
     // flags for buffer type and size if they are set
     bool bufferTypeSet = false, bufferSizeSet = false;
     
     // set argn value for tapplot
-    char argnValue[10] = "1";
+    char argnValue[10] = "2";
 
     // parse command line arguments
     for (int i = 1; i < argc; i++) {
