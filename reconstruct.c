@@ -13,7 +13,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <fcntl.h>
-#include <semaphore.h>
+#include <getopt.h>
 
 #define MAX_PAIRS 100
 #define MAX_NAME_LEN 50
@@ -55,9 +55,25 @@ void compileSample(KnownValues* knownValues, char* outSample);
 int nameInKnownVals(KnownValues *values, char * name);
 
 int main(int argc, char *argv[]) {
+    int opt, writeKey, readKey;
+    while ((opt = getopt(argc, argv, "R:W:n:")) != -1) {
+        switch (opt) {
+            case 'R':
+                readKey = atoi(optarg);
+            case 'W':
+                writeKey = atoi(optarg);
+                break;
+            case 'n':
+                break;
+            default:
+                fprintf(stderr, "Usage: %s -k <key>\n", argv[0]);
+                exit(1);
+        }
+    }
+
     // open shared memory that we initialized in tapper between observe and reconstruct
-    Buffer * obsrecBuffer = openBuffer(OBSERVE_KEY);
-    Buffer * rectapBuffer = openBuffer(PLOT_KEY);
+    Buffer * obsrecBuffer = openBuffer(readKey);
+    Buffer * rectapBuffer = openBuffer(writeKey);
 
     // initialize known values struct to hold the last known values
     KnownValues knownValues = {0};
@@ -73,9 +89,7 @@ int main(int argc, char *argv[]) {
     // reading from the buffer 
     // process data from obsrecBuffer, data observe wrote
     while (true){
-        fprintf(stderr, "IM TRYING TO READ\n");
         char* dataObs = readBuffer(obsrecBuffer);
-        fprintf(stderr, "I READ SOMETHING\n");
         // check for END marker symbolizing no more data to read
         if (strcmp(dataObs, "END_OF_DATA_YEET") == 0) {
             break;
@@ -86,7 +100,6 @@ int main(int argc, char *argv[]) {
                 char sample[100];
                 compileSample(&knownValues, sample); 
                 writeBuffer(rectapBuffer, sample);
-                fprintf(stderr, "RECONSTRUCT - Wrote to buffer: %s\n", sample);
             }
             updateLastKnownValues(&parsedData, &knownValues);
             //findEndName(&knownValues);
@@ -95,7 +108,6 @@ int main(int argc, char *argv[]) {
                 char sample[100];
                 compileSample(&knownValues, sample);
                 writeBuffer(rectapBuffer, sample);
-                fprintf(stderr, "RECONSTRUCT - Wrote to buffer: %s\n", sample);  
             }
         }
     }
@@ -103,13 +115,11 @@ int main(int argc, char *argv[]) {
     // write into the buffer, at the very end, the end marker
     // end of data yeet bc i dont think this will be part of the values we are observing
     writeBuffer(rectapBuffer, "END_OF_DATA_YEET");
-    fprintf(stderr, "RECONSTRUCT - Wrote to buffer: END_OF_DATA_YEET\n");
 
     // Detach from shared memory segments
     shmdt(obsrecBuffer);
     shmdt(rectapBuffer);
 
-    fprintf(stderr, "RECON RETS\n");
     fflush(stderr);
     return 0;
 }

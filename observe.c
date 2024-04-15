@@ -7,7 +7,7 @@
 #include <sys/shm.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <semaphore.h>
+#include <getopt.h>
 #include "bufferLibSimplified.h"
 
 //  reads input either from a file or stdin. The input data will be a series of strings, each terminated by a newline either until the end-of-file input or the user types ctrl-d to end the standard input stream. NOTE that ctrl-d (ctrl  and the 'd' key together) sends an EOF signal to the foreground process, so as long as tapper is running, it will not terminate your shell program. 
@@ -65,7 +65,23 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
     }
-    Buffer * shmBuffer = openBuffer(KEY);
+    int opt, writeKey;
+    while ((opt = getopt(argc, argv, "R:W:n:")) != -1) {
+        switch (opt) {
+            case 'R':
+                break;
+            case 'W':
+                writeKey = atoi(optarg);
+                break;
+            case 'n':
+                break;
+            default:
+                fprintf(stderr, "Usage: %s -k <key>\n", argv[0]);
+                exit(1);
+        }
+    }
+
+    Buffer * shmBuffer = openBuffer(writeKey);
 
     // read and parse from either a file or stdin
     char line[MAX_LINE_LEN];
@@ -73,7 +89,6 @@ int main(int argc, char *argv[]) {
 
     // loop to read from stdin
     while (fgets(line, MAX_LINE_LEN, stdin) != NULL){
-        fprintf(stderr, "OBSERVE GOT LINE %s\n", line);
         // parse the line
         // remove newline character
         line[strcspn(line, "\n")] = 0;
@@ -102,9 +117,7 @@ int main(int argc, char *argv[]) {
             snprintf(bufferData, sizeof(bufferData), "%s=%s", name, value);
             
             // Write into the buffer based on its type
-            fprintf(stderr, "OBSERVE - Writing to buffer: %s\n", bufferData);
             writeBuffer(shmBuffer, bufferData);
-            printf("OBSERVE - Wrote to buffer: %s\n", bufferData);
             // print whats inside
         }
     }
@@ -117,7 +130,6 @@ int main(int argc, char *argv[]) {
     shmdt(shmBuffer);
 
     // exit
-    fprintf(stderr, "OBSERVE RETS\n");
     fflush(stderr);
     return 0;
 }

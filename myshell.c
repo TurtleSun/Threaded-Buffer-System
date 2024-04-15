@@ -259,7 +259,7 @@ void executeCommands(struct command cmd) {
         return;
     } else if (forkRet == 0) { // Child process.
         // Set task to its own process group so background tasks don't die yet on SIGINT
-        setpgid(0, 0);
+        //setpgid(0, 0);
 
         // Execute the task!
         int execRet = execvp(cmd.tokens[0], cmd.tokens);

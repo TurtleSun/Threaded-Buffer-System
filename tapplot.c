@@ -9,6 +9,7 @@
 #include "bufferLibSimplified.h"
 #include <unistd.h>
 #include <stdbool.h>
+#include <getopt.h>
 
 #define PLOT_KEY 5678
 #define SHMSIZE 100000
@@ -28,17 +29,28 @@ void gnuplot(void * arg);
 void parseData(char* data, Pair *outPair);
 
 int main(int argc, char *argv[]) {
-   // get argn from argv array passed in
-    int argn = atoi(argv[6]);
-    // print so i can make sure it is arg[6]
-    //printf("argn: %d\n", argn);
+    int opt, writeKey, readKey, argn;
+    while ((opt = getopt(argc, argv, "R:W:n:")) != -1) {
+        switch (opt) {
+            case 'R':
+                readKey = atoi(optarg);
+            case 'W':
+                break;
+            case 'n':
+                argn = atoi(optarg);
+                break;
+            default:
+                fprintf(stderr, "Usage: %s -k <key>\n", argv[0]);
+                exit(1);
+        }
+    }
 
     if (argn < 1 || argn > MAX_NAMES) {
         fprintf(stderr, "Field index %d is out of range\n", argn);
         return EXIT_FAILURE;
     }
 
-    Buffer * shmBuffer = openBuffer(PLOT_KEY);
+    Buffer * shmBuffer = openBuffer(readKey);
 
     // Open a pipe to gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
@@ -64,7 +76,6 @@ int main(int argc, char *argv[]) {
             // buffer not ready yet
             continue;
         }
-        fprintf(stderr, "TAPPLOT GOT DATA %s\n", data);
         // check for END marker symbolizing no more data to read
         if (strcmp(data, "END_OF_DATA") == 0) {
             break;
@@ -87,7 +98,6 @@ int main(int argc, char *argv[]) {
     pclose(gnuplotPipe);
 
     // exit
-    fprintf(stderr, "TAPPLOT RETS\n");
     fflush(stderr);
     return 0;
 }
@@ -104,7 +114,6 @@ void processAndPlotData(char* data, FILE* gnuplotPipe, int argn, int sampleNumbe
 
     // Here, we assume that argn is the index of the value to be plotted
     char *value = pair.value; // Default value to be plotted
-    printf("This is data to be plotted %s\n", value);
     // You might need to update this value based on the value at index argn in the pair
 
     // Open a file to write the data
