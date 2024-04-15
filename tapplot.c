@@ -59,7 +59,12 @@ int main(int argc, char *argv[]) {
     int idx = -1;
     while (1){
         idx++;
-        char* data = ringRead(shmBuffer);
+        char* data = readBuffer(shmBuffer);
+        if (shmBuffer->isAsync == 1 && (data == NULL || strcmp(data, "") == 0)) {
+            // buffer not ready yet
+            continue;
+        }
+        fprintf(stderr, "TAPPLOT GOT DATA %s\n", data);
         // check for END marker symbolizing no more data to read
         if (strcmp(data, "END_OF_DATA") == 0) {
             break;

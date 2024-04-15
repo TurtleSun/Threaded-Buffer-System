@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
     // process data from obsrecBuffer, data observe wrote
     while (true){
         fprintf(stderr, "IM TRYING TO READ\n");
-        char* dataObs = ringRead(obsrecBuffer);
+        char* dataObs = readBuffer(obsrecBuffer);
         fprintf(stderr, "I READ SOMETHING\n");
         // check for END marker symbolizing no more data to read
         if (strcmp(dataObs, "END_OF_DATA_YEET") == 0) {
@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
             if (strcmp(knownValues.endName, "") == 0 && nameInKnownVals(&knownValues, parsedData.name) == 1) {
                 char sample[100];
                 compileSample(&knownValues, sample); 
-                ringWrite(rectapBuffer, sample);
+                writeBuffer(rectapBuffer, sample);
                 fprintf(stderr, "RECONSTRUCT - Wrote to buffer: %s\n", sample);
             }
             updateLastKnownValues(&parsedData, &knownValues);
@@ -94,7 +94,7 @@ int main(int argc, char *argv[]) {
             if (strcmp(parsedData.name, knownValues.endName) == 0) {
                 char sample[100];
                 compileSample(&knownValues, sample);
-                ringWrite(rectapBuffer, sample);
+                writeBuffer(rectapBuffer, sample);
                 fprintf(stderr, "RECONSTRUCT - Wrote to buffer: %s\n", sample);  
             }
         }
@@ -102,7 +102,7 @@ int main(int argc, char *argv[]) {
 
     // write into the buffer, at the very end, the end marker
     // end of data yeet bc i dont think this will be part of the values we are observing
-    ringWrite(rectapBuffer, "END_OF_DATA_YEET");
+    writeBuffer(rectapBuffer, "END_OF_DATA_YEET");
     fprintf(stderr, "RECONSTRUCT - Wrote to buffer: END_OF_DATA_YEET\n");
 
     // Detach from shared memory segments

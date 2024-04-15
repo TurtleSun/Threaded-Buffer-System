@@ -103,14 +103,14 @@ int main(int argc, char *argv[]) {
             
             // Write into the buffer based on its type
             fprintf(stderr, "OBSERVE - Writing to buffer: %s\n", bufferData);
-            ringWrite(shmBuffer, bufferData);
+            writeBuffer(shmBuffer, bufferData);
             printf("OBSERVE - Wrote to buffer: %s\n", bufferData);
             // print whats inside
         }
     }
     // write into the buffer, at the very end, the end marker
     // end of data yeet bc i dont think this will be part of the values we are observing
-    ringWrite(shmBuffer, "END_OF_DATA_YEET");
+    writeBuffer(shmBuffer, "END_OF_DATA_YEET");
 
     // close shared memory
     // detach it
