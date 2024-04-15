@@ -1,5 +1,14 @@
 #ifndef BUFFERLIBSIMPLIFIED
 #include <semaphore.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/shm.h>
+#include <getopt.h>
+#include <time.h>
 #define BUFFERLIBSIMPLIFIED .H
 #define MAX_STRINGS 100
 #define MAX_STR_LEN 100
