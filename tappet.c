@@ -3,27 +3,14 @@
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
-#include "bufferLib.h"
+#include "bufferLib_thread.h"
+#include "observe_thread.h"
+#include "reconstruct_thread.h"
+#include "tapplot_thread.h"
 
 #define MAX_TASK_SIZE 1024
-#define MAX_NAME_LEN 100
-#define MAX_VALUE_LEN 100
-#define MAX_LINE_LEN 200
-
-#define MAX_PAIRS 100
-
-typedef struct {
-    char name[MAX_NAME_LEN];
-    char value[MAX_VALUE_LEN];
-    int count;
-} Pair;
-
-// Define KnownValues struct
-typedef struct {
-    Pair pairs[MAX_PAIRS];
-    int count;
-    char endName[MAX_NAME_LEN];
-} KnownValues;
+#define MAX_NAME_LEN 50
+#define MAX_VALUE_LEN 50
 
 /* // Structs for buff
 typedef struct {
@@ -38,95 +25,108 @@ typedef struct {
 } Buffer; */
 
 // Function prototypes
-void *task_function(void *arg);
-void *observe_function(void *arg);
-void *reconstruct_function(void *arg);
-
-void parseData(const char* data, Pair* outPair);
-void updateLastKnownValues(Pair* newPair, KnownValues* knownValues);
-void findEndName(KnownValues *values);
-void compileSample(KnownValues* knownValues, char* outSample);
-
-void *tapplot_function(void *arg);
-
-// Define global variables for synchronization
-int num_tasks;
-int buff_size;
-char **tasks; // Array to hold task information
-char *knowntests[] = {"observe", "reconstruct", "tapplot"};
-char * testFile;
-Buffer buffer;
+void * task_function(void *arg);
 
 int main(int argc, char *argv[]) {
     // Parse command line arguments to extract tasks, buffering type, and size
-    // Example: tappet -t1 observe -t2 reconstruct -t3 tapplot -b async <optional testFile> 
+    // Example: tappet -t1 observe -t2 reconstruct -t3 tapplot <optional arg3> -b async <optional testFile> 
                             // and if -b sync -s <optional buffer_size>
 
-    tasks = (char **)malloc(MAX_TASK_SIZE * sizeof(char *));
-
+    // Currently Used Example:
+        // ./tappet -t1 observe -t2 reconstruct -t3 tapplot -b async small-test-file
     // Initialize buffer
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-t") == 0) {
-            num_tasks = atoi(argv[++i]);
-            tasks[num_tasks - 1] = strdup(argv[++i]);
+    printf("Just got in main. \n");
+    printf("number of arguments: %d\n", argc);
+
+    int argn = 1; // default for tapplot to print
+    int num_tasks = 0;
+    int buff_size;
+    char *tasks[MAX_TASK_SIZE]; // Array to hold task information
+    char * testFile = "standardOut";
+    char * theSync;
+    Parcel *parcel = malloc(sizeof(Parcel));
+    Buffer *buf1 = malloc(sizeof(Buffer));
+    Buffer *buf2 = malloc(sizeof(Buffer));
+
+    for (int i = 1; i < argc; i++){
+        printf("\n");
+        printf("inside the for loop! \n");
+        printf("argv %d = %s\n", i, argv[i]);
+        printf("\n");
+
+        int j = i + 1;
+
+        if (strcmp(argv[i], "-t1") == 0 || strcmp(argv[i], "-t2") == 0 || strcmp(argv[i], "-t3") == 0){
+            num_tasks = num_tasks + 1;
+            tasks[num_tasks - 1] = argv[i+1];
+
+            printf("\n");
+            printf("TASK: We've saved %s as tasks: %s\n", argv[i+1], tasks[num_tasks - 1]);
+            printf("\n");
+
         } else if (strcmp(argv[i], "-b") == 0) {
-            if (strcmp(argv[++i], "async") == 0) {
+            if (strcmp(argv[j], "async") == 0) {
+
+                theSync = "async";
                 buff_size = 4;
-                buffer = initBuffer("async", buff_size);
-            } else if (strcmp(argv[i], "sync") == 0) {
-                for (int j = i + 1; j < argc; j++) {
-                    if (strcmp(argv[j], "-s")) {
-                        buff_size = atoi(argv[j]);
-                    }
-                    if (j == argc - 1) {
-                        buff_size = 1;
-                    }
+
+                if (i+1 != argc-1){ // async isn't last arg, must be optional test-file
+                    testFile = argv[j+1];
                 }
-                buffer = initBuffer("sync", buff_size);
+            } else if (strcmp(argv[i+1], "sync") == 0) {
+                
+                theSync = "sync";
+                if (strcmp(argv[j+1], "-s") == 0) {
+                    buff_size = atoi(argv[j+1]);
+                } else {
+                    buff_size = 1;
+                }
             }
-            if (++i == argc - 1) {
-                testFile = stdin;
+        } else {
+            if (strcmp(argv[i-2], "-t1") == 0 || strcmp(argv[i-2], "-t2") == 0 || strcmp(argv[i-2], "-t3") == 0) {
+                // its an optional argn
+                argn = atoi(argv[i]);
             }
-        } else if (i == argc - 1) {
-            testFile = argv[i];
         }
     }
 
+    printf("This is my saved testFile: %s\n", testFile);
+    printf("Just finished parsing args...\n");
+
+    initBuffer(theSync, buff_size, argn, testFile, buf1);
+    initBuffer(theSync, buff_size, argn, testFile, buf2);
+    initParcel(buf1, buf2, parcel);
+                //parcel = initBuffer("sync", buff_size, argn, testFile);
+
+    //printf("This is outside of initBuf isAsync test in parcel: %d\n", parcel->buffer->isAsync);
+    //printf("This is outside of initBuf argn test in parcel: %d\n", parcel->arg3);
+    //printf("This is outside of initBuf testFile name test in parcel: %s\n", parcel->fd);
+
+
+    printf("Number of num_tasks: %d\n", num_tasks);
     // Create threads for each task
-    pthread_t threads[num_tasks];
-    for (int i = 0; i < num_tasks; ++i) {
+    pthread_t threads[3];
+    for (int i = 0; i < 3; i++) {
         char *task_name = tasks[i];
-        char function_name[MAX_TASK_SIZE + 10]; // Extra space for "_function" suffix
+        printf("Enters threaded for looop.\n");
 
-        // Create the function name by appending "_function" to the task name
-        snprintf(function_name, sizeof(function_name), "%s_function", task_name);
-
-        // Check if the task name is contained in knowntests
-        int is_known_task = 0;
-        for (int j = 0; j < sizeof(knowntests) / sizeof(knowntests[0]); ++j) {
-            if (strcmp(task_name, knowntests[j]) == 0) {
-                is_known_task = 1;
-                break;
-            }
-        }
-
-        if (is_known_task) {
-            // Create thread with the specific task function
-            pthread_create(&threads[i], NULL, function_name, (void *)&buffer);
+        if (strcmp(task_name, "observe") == 0){
+            printf("Running creations of observer");
+            pthread_create(&threads[i], NULL, observe_function, buf1);
+        } else if (strcmp(task_name, "reconstruct") == 0){
+            pthread_create(&threads[i], NULL, reconstruct_function, parcel);
+        } else if (strcmp(task_name, "tapplot") == 0){
+            pthread_create(&threads[i], NULL, tapplot_function, buf2);
         } else {
-            // Create thread with the generic task function
-            pthread_create(&threads[i], NULL, task_function, (void *)tasks[i]);
+            printf("SOMETHING WRONG HAPPENED\n");
+            //pthread_create(&threads[i], NULL, task_function, parcel);
         }
+
     }
 
     // Wait for threads to finish
-    for (int i = 0; i < num_tasks; ++i) {
+    for (int i = 0; i < num_tasks; i++) {
         pthread_join(threads[i], NULL);
-    }
-
-    // Free allocated memory
-    for (int i = 0; i < num_tasks; ++i) {
-        free(tasks[i]);
     }
 
     return 0;
@@ -152,18 +152,28 @@ int main(int argc, char *argv[]) {
 // Function executed by each thread
 void *task_function(void *arg) {
     char *command = arg;
-
     // Execute shell command using system()
     system(command);
 
     pthread_exit(NULL);
 }
 
-void *observe_function(void *arg){
-    Buffer *buffer = (Buffer *)arg;
+/* void *observe_function(void *arg){
+    printf("Observe thread made!\n");
 
-    // Initialize the buffer with received type and size
-    // Buffer shmBuffer = initBuffer(bufferType, bufferSize);
+    Parcel *arguemnts = (Parcel *)arg;
+    Buffer buffer = arguemnts->buffer;
+    int hasTesFile = arguemnts->hasTestFile;
+
+    //printf("Observe BUFF: %p\n", &buffer);
+    //printf("Observe BUFF ISASYNC: %d\n", buffer.isAsync);
+
+    FILE *fp;
+    if(hasTesFile) {
+        fp = fopen(testFile, "r");
+    }else {
+        fp = stdin;
+    }
 
     // read and parse from either a file or stdin
     char line[MAX_LINE_LEN];
@@ -184,9 +194,14 @@ void *observe_function(void *arg){
             continue;
         }
 
+        // print line
+        printf("name: %s, value: %s\n", name, value);
+
         // compare current value with last value, if they are different write value in shared memory
-        if(strcmp(lastValue, value) != 0) {
+        if(strcmp(getLastKnown(pairlist, name), value) != 0) {
+            printf("Value changed: %s\n", value);
             strcpy(lastValue, value);
+            pairlist = updateLastKnown(pairlist, name, value);
             // Write to shared memory
             //TODO: Change shm_addr here to an attribute (slot) of a structure that we cast shm_addr to.
             // snprintf(shm_addr, MAX_LINE_LEN, "%s=%s", name, value);
@@ -195,21 +210,33 @@ void *observe_function(void *arg){
             char bufferData[MAX_LINE_LEN];
             snprintf(bufferData, sizeof(bufferData), "%s=%s", name, value);
             
+            printf("bufferData: %s\n", bufferData);
             // Write into the buffer based on its type
-            writeBuffer(buffer, bufferData);
+            writeBuffer(&buffer, bufferData);
+            // print whats inside
+            printf("WRITTEN IN BUFF IS: %s\n", buffer.data[0]);
         }
     }
+
     // once it is done writing data to the buffer, set the reading flag to 1
-    buffer->reading = 1;
+    buffer.reading = 1;
     // write into the buffer, at the very end, the end marker
-    writeBuffer(buffer, "END_OF_DATA");
+    writeBuffer(&buffer, "END_OF_DATA");
+
+    if(hasTesFile){
+        fclose(fp);
+    }
 
     pthread_exit(NULL);
-}
+} */
 
-void *reconstruct_function(void *arg){
+/* void *reconstruct_function(void *arg){
+    printf("Reconstruct thread made!");
+    Parcel *arguemnts = (Parcel *)arg;
+    Buffer buffer = arguemnts->buffer;
 
-    Buffer *buffer = (Buffer *)arg;
+    //printf("Reconstruct BUFF: %p\n", &buffer);
+    //printf("Reconstruct BUFF ISASYNC: %d\n", buffer.isAsync);
 
     // initialize known values struct to hold the last known values
     KnownValues knownValues;
@@ -218,15 +245,11 @@ void *reconstruct_function(void *arg){
     // initialize a pair to hold the parsed data
     Pair parsedData;
 
-    while (!buffer->reading) {
-        // sleep briefly
-        usleep(1000);
-    }
-
     // reading from the buffer 
     // process data from obsrecBuffer, data observe wrote
     while (1){
-        char* dataObs = readBuffer(buffer);
+        char* dataObs = readBuffer(&buffer);
+        printf("READING: This is what we read from buffer %s\n", dataObs);
         // check for END marker symbolizing no more data to read
         if (strcmp(dataObs, "END_OF_DATA") == 0) {
             break;
@@ -240,21 +263,27 @@ void *reconstruct_function(void *arg){
                 char sample[MAX_TASK_SIZE];
                 compileSample(&knownValues, sample);
                 printf("There is the sample: %s\n", sample);  
-                writeBuffer(buffer, sample);
+                writeBuffer(&buffer, sample);
             }
+
+            printf("NEXT READ INDEX: %d\n", buffer.latest);
         }
     }
 
-    // once it is done writing data to the buffer, set the reading flag to 1
-    buffer->reading = 1;
     // write into the buffer, at the very end, the end marker
-    writeBuffer(buffer, "END_OF_DATA");
+    writeBuffer(&buffer, "END_OF_DATA");
 
     pthread_exit(NULL);
-}
+} */
 
-void *tapplot_function(void *arg){
-    Buffer *buffer = (Buffer *)arg;
+/* void *tapplot_function(void *arg){
+    printf("Tapplot thread made!");
+    Parcel *arguemnts = (Parcel *)arg;
+    Buffer buffer = arguemnts->buffer;
+    int arg3 = arguemnts->arg3;
+
+    //printf("Tapplot BUFF: %p\n", &buffer);
+    //printf("Tapplot BUFF ISASYNC: %d\n", buffer.isAsync);
 
     // Open a pipe to gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
@@ -270,37 +299,52 @@ void *tapplot_function(void *arg){
     fprintf(gnuplotPipe, "set xlabel 'Sample Number'\n");
     fprintf(gnuplotPipe, "set ylabel 'Value'\n");
     fprintf(gnuplotPipe, "plot '-' using 1:2 with lines title 'Field %d'\n", 0);
+      
 
-
-    // read from shared memory
-    // ... TODO: finish this
-    while (1) {
-        // if reading flag is 0 then the data is not ready to read
-        while (!buffer->reading) {
-            // sleep briefly
-            usleep(1000);
+    while (1){
+        char* data = readBuffer(&buffer);
+        // check for END marker symbolizing no more data to read
+        if (strcmp(data, "END_OF_DATA") == 0) {
+            break;
         }
-        
-        // reading from the buffer
-        // reading from the buffer 
-        while (1){
-            char* data = readBuffer(buffer);
-            // check for END marker symbolizing no more data to read
-            if (strcmp(data, "END_OF_DATA") == 0) {
-                break;
-            }
-            if (data != NULL) {
-                processAndPlotData(data);            }
+        if (data != NULL) {
+            processAndPlotData(data, arg3);            
         }
     }
 
     pthread_exit(NULL);
 }
+ */
+/* // OBSERVE FUNCTIONS
+struct PairList updateLastKnown(struct PairList pairlist, char * name, char * newVal) {
+    for (int i = 0; i < pairlist.numPairs; i++) {
+        if (strcmp(pairlist.pairs[i].name, name) == 0 && strcmp(pairlist.pairs[i].value, newVal) != 0) {
+            strcpy(pairlist.pairs[i].value, newVal);
+            return pairlist;
+        }
+    }
+    strcpy(pairlist.pairs[pairlist.numPairs].name, name);
+    strcpy(pairlist.pairs[pairlist.numPairs].value, newVal);
+    pairlist.numPairs++;
+    return pairlist;
+}
+
+char * getLastKnown(struct PairList pairlist, char * name) {
+    for (int i = 0; i < pairlist.numPairs; i++) {
+        if (strcmp(pairlist.pairs[i].name, name) == 0) {
+            return pairlist.pairs[i].value;
+        }
+    }
+    return "";
+}
+
 
 // parseData function
 // splits a "name=value" string into a Pair struct.
 void parseData(const char* data, Pair* outPair) {
     // up to 99 characters for name, up to 99 characters for value, and up to 1 character for the '='
+    printf("TAPPLOT PARSING DATA: %s\n", data);
+
     sscanf(data, "%99[^=]=%99[^\n]", outPair->name, outPair->value);
 }
 
@@ -357,8 +401,8 @@ void compileSample(KnownValues *values, char sample[]) {
         }
     }
 }
-
-void processAndPlotData(char * data){
+ */
+/* void processAndPlotData(char * data, int index){
     // Parse the data into name and value
     Pair pair;
     parseData(data, &pair);
@@ -385,10 +429,10 @@ void processAndPlotData(char * data){
     // Close the file
     fclose(dataFile);
 
-    gnuplot();
+    gnuplot(NULL);
 }
 
-void gnuplot() {
+void gnuplot(void * arg) {
     // Open a pipe to Gnuplot
     FILE *gnuplotPipe = popen("gnuplot", "w");
     if (!gnuplotPipe) {
@@ -407,4 +451,4 @@ void gnuplot() {
 
     // Close the pipe
     pclose(gnuplotPipe);
-}
+} */

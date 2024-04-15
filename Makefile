@@ -1,4 +1,4 @@
-PROGS=myshell tapper observe reconstruct tapplot
+PROGS=myshell tapper observe reconstruct tapplot tappet
 OBJS=myshell.o
 
 all: $(PROGS)
@@ -23,5 +23,8 @@ reconstruct: reconstruct.c bufferLibSimplified.c
 	gcc -g -pthread -o reconstruct reconstruct.c bufferLibSimplified.c
 
 tapplot: tapplot.c bufferLibSimplified.c
-	gcc -g -pthread -o tapplot tapplot.c bufferLibSimplified.c
+	gcc -g -o tapplot tapplot.c bufferLibSimplified.c
+
+tappet: tappet.c bufferLib_thread.c observe_thread.c reconstruct_thread.c tapplot_thread.c
+	gcc -g -pthread -o tappet tappet.c bufferLib_thread.c observe_thread.c reconstruct_thread.c tapplot_thread.c
 

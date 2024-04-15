@@ -1,19 +1,11 @@
-// P2's task is to execute a program called reconstruct, which reconstructs the missing data not sent from P1. 
-// Using the above example, since P2 receives "temperature=60 F",  followed by "time=10 s", then "time=20 s" it knows that 
-// "temperature=60 F" is the last such "name=value" pair at "time=20 s". 
-// P2's reconstruction process will create a table of samples for all "name=value" pairs seen so far.
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
 #include <sys/mman.h>
-#include <sys/shm.h>
-#include "bufferLibSimplified.h"
+#include "bufferLib_thread.h"
 #include <unistd.h>
-#include <stdbool.h>
-#include <fcntl.h>
-#include <getopt.h>
+#include <pthread.h>
 
 #define MAX_PAIRS 100
 #define MAX_NAME_LEN 50
@@ -21,12 +13,6 @@
 #define MAX_LINE_LENGTH 100
 #define MAX_SAMPLE_SIZE 1024
 #define MAX_UNIQUE_NAMES 50
-
-#define OBSERVE_KEY 1234
-#define PLOT_KEY 5678
-#define SHMSIZE 100000
-
-#define MAX_SAMPLES 100 // Maximum number of samples
 
 typedef struct {
     char name[MAX_NAME_LEN];
@@ -54,52 +40,42 @@ void findEndName(KnownValues *values);
 void compileSample(KnownValues* knownValues, char* outSample);
 int nameInKnownVals(KnownValues *values, char * name);
 
-int main(int argc, char *argv[]) {
-    int opt, writeKey, readKey;
-    while ((opt = getopt(argc, argv, "R:W:n:")) != -1) {
-        switch (opt) {
-            case 'R':
-                readKey = atoi(optarg);
-            case 'W':
-                writeKey = atoi(optarg);
-                break;
-            case 'n':
-                break;
-            default:
-                fprintf(stderr, "Usage: %s -k <key>\n", argv[0]);
-                exit(1);
-        }
-    }
+void *reconstruct_function(void *arg){
+    printf("Reconstruct thread made!\n");
+    Parcel *arguemnts = (Parcel *)arg;
+    Buffer *buffer1 = arguemnts->readBuffer;
+    Buffer *buffer2 = arguemnts->writeBuffer;
 
-    // open shared memory that we initialized in tapper between observe and reconstruct
-    Buffer * obsrecBuffer = openBuffer(readKey);
-    Buffer * rectapBuffer = openBuffer(writeKey);
+    //printf("Reconstruct BUFF: %p\n", &buffer);
+    printf("CHECKING: Reconstruct BUFF1 ISASYNC: %d\n", buffer1->isAsync);
+    printf("CHECKING: Reconstruct BUFF2 ISASYNC: %d\n", buffer2->isAsync);
 
-    // initialize known values struct to hold the last known values
     KnownValues knownValues = {0};
     // char array to hold the data
     char data[MAX_LINE_LENGTH];
     // initialize a pair to hold the parsed data
     Pair parsedData;
 
-    ///////////////////// READING FROM OBSERVE
-    // read from shared memory between observe and reconstruct and reconstruct the data logic in separate function
-    // while reading flag is 0 then the data is not ready to read
-
-    // reading from the buffer 
-    // process data from obsrecBuffer, data observe wrote
-    while (true){
-        char* dataObs = readBuffer(obsrecBuffer);
+    while (1){
+        //fprintf(stderr, "IM TRYING TO READ\n");
+        char* dataObs = readBuffer(buffer1);
+        //fprintf(stderr, "I READ SOMETHING\n");
         // check for END marker symbolizing no more data to read
-        if (strcmp(dataObs, "END_OF_DATA_YEET") == 0) {
+        if (strcmp(dataObs, "END_OF_DATA") == 0) {
             break;
         }
-        if (dataObs != NULL || strcmp(dataObs, "") != 0) {
+        if (dataObs != NULL && (strcmp(dataObs, "") != 0)) {
+
+            fprintf(stderr, "RECONSTRUCT : Here is dataObs: %s\n", dataObs);
+
             parseData(dataObs, &parsedData);
+
             if (strcmp(knownValues.endName, "") == 0 && nameInKnownVals(&knownValues, parsedData.name) == 1) {
                 char sample[100];
-                compileSample(&knownValues, sample); 
-                writeBuffer(rectapBuffer, sample);
+                compileSample(&knownValues, sample);
+                fprintf(stderr, "BEFORE RECON WB: %s\n", sample);
+                writeBuffer(buffer2, sample);
+                fprintf(stderr, "AFTER RECON WB :) \n");
             }
             updateLastKnownValues(&parsedData, &knownValues);
             //findEndName(&knownValues);
@@ -107,21 +83,18 @@ int main(int argc, char *argv[]) {
             if (strcmp(parsedData.name, knownValues.endName) == 0) {
                 char sample[100];
                 compileSample(&knownValues, sample);
-                writeBuffer(rectapBuffer, sample);
+                fprintf(stderr, "BEFORE RECON WB - OTHER: %s\n", sample);
+                writeBuffer(buffer2, sample);
+                fprintf(stderr, "AFTER RECON WB - OTHER :) \n");
             }
         }
     }
 
     // write into the buffer, at the very end, the end marker
     // end of data yeet bc i dont think this will be part of the values we are observing
-    writeBuffer(rectapBuffer, "END_OF_DATA_YEET");
+    writeBuffer(buffer2, "END_OF_DATA");
 
-    // Detach from shared memory segments
-    shmdt(obsrecBuffer);
-    shmdt(rectapBuffer);
-
-    fflush(stderr);
-    return 0;
+    pthread_exit(NULL);
 }
 
 int nameInKnownVals(KnownValues *myValues, char * name) {
@@ -165,8 +138,6 @@ void updateLastKnownValues(Pair* newPair, KnownValues* knownValues) {
     }
 }
 
-// compileSample function
-// compiles the sample from the known values and end name
 void compileSample(KnownValues *values, char sample[]) {
     // Initialize the sample string
     sample[0] = '\0'; // Ensure the string is empty initially
