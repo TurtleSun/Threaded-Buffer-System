@@ -7,7 +7,7 @@
 #include <sys/shm.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <semaphore.h>
+#include <getopt.h>
 #include "bufferLibSimplified.h"
 
 //  reads input either from a file or stdin. The input data will be a series of strings, each terminated by a newline either until the end-of-file input or the user types ctrl-d to end the standard input stream. NOTE that ctrl-d (ctrl  and the 'd' key together) sends an EOF signal to the foreground process, so as long as tapper is running, it will not terminate your shell program. 
@@ -17,7 +17,7 @@
 #define MAX_NAME_LEN 100
 #define MAX_VALUE_LEN 100
 #define MAX_LINE_LEN 200
-#define KEY 1234
+//#define KEY 1234
             /// should this be buffer_size?
 #define SHMSIZE 100000
 
@@ -65,7 +65,24 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
     }
-    Buffer * shmBuffer = openBuffer(KEY);
+    int opt, writeKey;
+
+    while ((opt = getopt(argc, argv, "R:W:")) != -1) {
+        switch (opt) {
+        case 'R':
+            // don't need to read from a buffer.
+            break;
+        case 'W':
+            writeKey = atoi(optarg);
+            break;
+        default: /* '?' */
+            fprintf(stderr, "Usage: %s [-t nsecs] [-n] name\n",
+                    argv[0]);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    Buffer * shmBuffer = openBuffer(writeKey);
 
     // read and parse from either a file or stdin
     char line[MAX_LINE_LEN];

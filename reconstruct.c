@@ -13,7 +13,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <fcntl.h>
-#include <semaphore.h>
+#include <getopt.h>
 
 #define MAX_PAIRS 100
 #define MAX_NAME_LEN 50
@@ -55,9 +55,27 @@ void compileSample(KnownValues* knownValues, char* outSample);
 int nameInKnownVals(KnownValues *values, char * name);
 
 int main(int argc, char *argv[]) {
+    int opt, readKey, writeKey;
+
+    while ((opt = getopt(argc, argv, "R:W:")) != -1) {
+        switch (opt) {
+        case 'R':
+            readKey = atoi(optarg);
+            break;
+        case 'W':
+            writeKey = atoi(optarg);
+            break;
+        default: /* '?' */
+            fprintf(stderr, "Usage: %s [-t nsecs] [-n] name\n",
+                    argv[0]);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+
     // open shared memory that we initialized in tapper between observe and reconstruct
-    Buffer * obsrecBuffer = openBuffer(OBSERVE_KEY);
-    Buffer * rectapBuffer = openBuffer(PLOT_KEY);
+    Buffer * obsrecBuffer = openBuffer(readKey);
+    Buffer * rectapBuffer = openBuffer(writeKey);
 
     // initialize known values struct to hold the last known values
     KnownValues knownValues = {0};
@@ -73,9 +91,11 @@ int main(int argc, char *argv[]) {
     // reading from the buffer 
     // process data from obsrecBuffer, data observe wrote
     while (true){
-        fprintf(stderr, "IM TRYING TO READ\n");
         char* dataObs = readBuffer(obsrecBuffer);
-        fprintf(stderr, "I READ SOMETHING\n");
+        if (obsrecBuffer->isAsync == 1 && (dataObs == NULL || strcmp(dataObs, "") == 0)) {
+            continue;
+        }
+        fprintf(stderr, "RECONSTRUCT - Read from buffer: %s\n", dataObs);
         // check for END marker symbolizing no more data to read
         if (strcmp(dataObs, "END_OF_DATA_YEET") == 0) {
             break;
@@ -83,6 +103,7 @@ int main(int argc, char *argv[]) {
         if (dataObs != NULL) {
             parseData(dataObs, &parsedData);
             if (strcmp(knownValues.endName, "") == 0 && nameInKnownVals(&knownValues, parsedData.name) == 1) {
+                fprintf(stderr, "RECONSTRUCT - Found end name: %s\n", knownValues.endName);
                 char sample[100];
                 compileSample(&knownValues, sample); 
                 writeBuffer(rectapBuffer, sample);

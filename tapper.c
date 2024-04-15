@@ -24,6 +24,13 @@ typedef struct {
     char bufferSize[10];
 } BufferConfig;
 
+typedef struct {
+    int readBuf;
+    char * readBufStr;
+    int writeBuf;
+    char* writeBufStr;
+} KeyPair;
+
 BufferConfig bufferInfo;
 
 // parse command line arguments function
@@ -33,12 +40,29 @@ int main(int argc, char *argv[]){
     // parse command line arguments
     parse_args(argc, argv);
 
-    keys[0] = 1234;
-    keys[1] = 5678;
+    KeyPair keypairs[num_processes];
+    for (int i = 0; i < num_processes; i++) {
+        keypairs[i].readBuf = -1;
+        keypairs[i].writeBuf = -1;
+        keypairs[i].readBufStr = (char *)malloc(10);
+        keypairs[i].writeBufStr = (char *)malloc(10);
+        if (keypairs[i].readBufStr == NULL || keypairs[i].writeBufStr == NULL) {
+            fprintf(stderr, "malloc failed\n");
+            exit(1);
+        }
+    }
+    keypairs[0].readBuf = 0;
+    strcpy(keypairs[0].readBufStr, "0");
+    keypairs[0].writeBuf = 1234;
+    strcpy(keypairs[0].writeBufStr, "1234");
     // number of processes is 3: p1 observe, p2 reconstruct, p3 tapplot
     int bufSize = atoi(bufferInfo.bufferSize);
     for (int i = 0; i < num_processes - 1; i++) {
-        createBuffer(keys[i], bufferInfo.isAsync, bufSize);
+        createBuffer(keypairs[i].writeBuf, bufferInfo.isAsync, bufSize);
+        keypairs[i+1].readBuf = keypairs[i].writeBuf;
+        keypairs[i+1].writeBuf = keypairs[i].writeBuf + 1;
+        strcpy(keypairs[i+1].readBufStr, keypairs[i].writeBufStr);
+        sprintf(keypairs[i+1].writeBufStr, "%d", keypairs[i+1].writeBuf);
     }
 
     // default arg number for tapplot
@@ -57,16 +81,20 @@ int main(int argc, char *argv[]){
             if (i == 0) { // First process (observe)
             // pass in buffer size and type for when initializing buffer in children
             program = "./observe";
-            args[0] = program; args[1] = "-b"; args[2] = bufferInfo.isAsync; 
-            args[3] = "-s"; args[4] = bufferInfo.bufferSize; args[5] = NULL;
+            fprintf(stderr, "OBSERVE KEYS: READ: %d, WRITE: %d\n", keypairs[i].readBuf, keypairs[i].writeBuf);
+            args[0] = program; args[1] = "-R"; args[2] = keypairs[i].readBufStr; 
+            args[3] = "-W"; args[4] = keypairs[i].writeBufStr; args[5] = NULL;
             } else if (i == num_processes - 1) { // Last process (tapplot)
             program = "./tapplot";
-            args[0] = program; args[1] = "-b"; args[2] = bufferInfo.isAsync;
-            args[3] = "-s"; args[4] = bufferInfo.bufferSize; args[5] = "-n"; args[6] = argnValue; args[7] = NULL;
+            fprintf(stderr, "TAPPLOT KEYS: READ: %d, WRITE: %d\n", keypairs[i].readBuf, keypairs[i].writeBuf);
+            args[0] = program; args[1] = "-n"; args[2] = argnValue;
+            args[3] = "-R"; args[4] = keypairs[i].readBufStr; 
+            args[5] = "-W"; args[6] = keypairs[i].writeBufStr; args[7] = NULL;
             } else { // Middle process (reconstruct)
             program = "./reconstruct";
-            args[0] = program; args[1] = "-b"; args[2] = bufferInfo.isAsync; 
-            args[3] = "-s"; args[4] = bufferInfo.bufferSize; args[5] = NULL;
+            fprintf(stderr, "RECON KEYS: READ: %d, WRITE: %d\n", keypairs[i].readBuf, keypairs[i].writeBuf);
+            args[0] = program; args[1] = "-R"; args[2] = keypairs[i].readBufStr; 
+            args[3] = "-W"; args[4] = keypairs[i].writeBufStr; args[5] = NULL;
             }
             // arguments for buffer for children passed through execvp
             execvp(program, args);

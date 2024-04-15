@@ -1,4 +1,4 @@
-PROGS=myshell tapper observe reconstruct tapplot
+PROGS=myshell tapper observe reconstruct tapplot #tappet
 OBJS=myshell.o
 
 all: $(PROGS)
@@ -10,7 +10,7 @@ myshell: $(OBJS)
 	gcc -g -pthread -o $@ $^
 
 clean:
-	rm -rf $(PROGS) *.o
+	rm -rf $(PROGS) *.o plot_data.txt plot.png
 	-bash ./clearIPCS.sh
 
 tapper: tapper.c bufferLibSimplified.c
@@ -24,4 +24,7 @@ reconstruct: reconstruct.c bufferLibSimplified.c
 
 tapplot: tapplot.c bufferLibSimplified.c
 	gcc -g -pthread -o tapplot tapplot.c bufferLibSimplified.c
+
+tappet: tappet.c bufferLibSimplified.c
+	gcc -g -pthread -o tappet tappet.c bufferLibSimplified.c
 

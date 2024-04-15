@@ -9,6 +9,7 @@
 #include "bufferLibSimplified.h"
 #include <unistd.h>
 #include <stdbool.h>
+#include <getopt.h>
 
 #define PLOT_KEY 5678
 #define SHMSIZE 100000
@@ -28,17 +29,32 @@ void gnuplot(void * arg);
 void parseData(char* data, Pair *outPair);
 
 int main(int argc, char *argv[]) {
-   // get argn from argv array passed in
-    int argn = atoi(argv[6]);
-    // print so i can make sure it is arg[6]
-    //printf("argn: %d\n", argn);
 
-    if (argn < 1 || argn > MAX_NAMES) {
-        fprintf(stderr, "Field index %d is out of range\n", argn);
-        return EXIT_FAILURE;
+    int opt, readKey, argn;
+
+    while ((opt = getopt(argc, argv, "R:W:n:")) != -1) {
+        switch (opt) {
+        case 'R':
+            readKey = atoi(optarg);
+            break;
+        case 'W':
+            // don't need to write to a buffer
+            break;
+        case 'n':
+            argn = atoi(optarg);
+            if (argn < 1 || argn > MAX_NAMES) {
+                fprintf(stderr, "Field index %d is out of range\n", argn);
+                return EXIT_FAILURE;
+            }
+            break;
+        default: /* '?' */
+            fprintf(stderr, "Usage: %s [-t nsecs] [-n] name\n",
+                    argv[0]);
+            exit(EXIT_FAILURE);
+        }
     }
 
-    Buffer * shmBuffer = openBuffer(PLOT_KEY);
+    Buffer * shmBuffer = openBuffer(readKey);
 
     // Open a pipe to gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
