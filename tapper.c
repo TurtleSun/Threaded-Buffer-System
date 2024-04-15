@@ -153,7 +153,7 @@ void parse_args(int argc, char *argv[]){
         }
     }
 
-    if (!bufferTypeSet || (bufferInfo.isAsync == 0 && !bufferSizeSet)) {
+    if (!bufferTypeSet || ((strcmp(bufferInfo.isAsync, "sync") == 0) && !bufferSizeSet)) {
         fprintf(stderr, "Both -b (buffer type) must be specified. If async, must specify -s (buffer size)\n");
         exit(1);
     }
