@@ -8,7 +8,7 @@
 
 void *tapplot_function(void *arg);
 void processAndPlotData(char* data, FILE* gnuplotPipe, int argn, int sampleNumber);
-void gnuplot(void * arg);
+//void gnuplot(void * arg);
 
 void *tapplot_function(void *arg){
     printf("Tapplot thread made! \n");
@@ -86,9 +86,10 @@ void processAndPlotData(char* data, FILE* gnuplotPipe, int argn, int sampleNumbe
     // Close the file
     fclose(dataFile);
 
-    gnuplot(NULL);
+    //gnuplot(NULL);
 }
 
+/*
 void gnuplot(void * arg) {
     // Open a pipe to Gnuplot
     FILE *gnuplotPipe = popen("gnuplot", "w");
@@ -108,4 +109,4 @@ void gnuplot(void * arg) {
 
     // Close the pipe
     pclose(gnuplotPipe);
-}
+}*/

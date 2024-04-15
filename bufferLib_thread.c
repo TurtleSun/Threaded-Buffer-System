@@ -34,7 +34,7 @@ void initBuffer(char * type, int size, int arg3, char * testFile, Parcel * parce
 
     printf("Entered initBuffer\n");
 
-    Buffer * buf;
+    Buffer * buf = malloc(sizeof(Buffer));
     buf->in = 0;
     buf->out = 0;
     buf->size = size;
