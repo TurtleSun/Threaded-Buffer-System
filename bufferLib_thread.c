@@ -152,15 +152,10 @@ void initParcel(Buffer* readBuffer, Buffer* writeBuffer, Parcel * parcel){
 }
 
 void asyncWrite (Buffer * buffer, char * item) {
-  fprintf (stderr,"ASYNCWRITE ITEM PASSED: %s\n", item);
   int pair, index;
   pair = !buffer->reading;
   index = !buffer->slots[pair]; // Avoids last written slot in this pair, which reader may be reading.
-  fprintf(stderr, "ITEM BEFORE: %s\n", item);
-  fprintf(stderr, "BUFFER BEFORE: %s\n", buffer->data[index + (2*pair)]);
   strncpy(buffer->data[index + (2*pair)], item, 99); // Copy item to data slot. Hardcoded # bytes
-  fprintf(stderr, "ITEM AFTER: %s\n", item);
-  fprintf(stderr, "BUFFER AFTER : %s\n", buffer->data[index + (2*pair)]);
   buffer->slots[pair] = index; // Indicates latest data within selected pair.
   buffer->latest = pair; // Indicates pair containing latest data.
   usleep(DELAY);
@@ -182,26 +177,21 @@ char * asyncRead (Buffer * buffer) {
 }
 
 void ringWrite(Buffer *buffer, char *item) {
-    fprintf(stderr, "STARTING RING WRITE\n");
-
-    fprintf(stderr, "RING: PASSED MUTEX, NOW WRITING\n");
+    while (((buffer->in + 1) % buffer->size) == buffer->out);
     // Put value into the buffer
     strncpy(buffer->data[buffer->in], item, 99);
     buffer->in = (buffer->in + 1) % buffer->size;
-
-    fprintf(stderr, "FIN RING WRITE\n");
 }
 
 char *ringRead(Buffer *buffer) {
-    
     char *result = malloc(100);
     if (result == NULL) {
         fprintf(stderr, "malloc error");
         exit(1);
     }
+    while (buffer->out == buffer->in);
     strncpy(result, buffer->data[buffer->out], 99);
     buffer->out = (buffer->out + 1) % buffer->size;
-    
     return result;
 }
 

@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
                 
                 theSync = "sync";
                 if (strcmp(argv[j+1], "-s") == 0) {
-                    buff_size = atoi(argv[j+1]);
+                    buff_size = atoi(argv[j+2]);
                 } else {
                     buff_size = 1;
                 }
