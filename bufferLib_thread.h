@@ -10,27 +10,24 @@ typedef struct {
     char data[MAX_STRINGS][MAX_STRING_LINES];
     int size;
     int isAsync;
+    int argn;
     // Used only for ring bufs
     int in;
     int out;
-    pthread_mutex_t mutex;
-    pthread_cond_t slotsEmptyCond;
-    pthread_cond_t slotsFullCond;
     // Used only for async bufs
     int latest;
     int reading;
     int slots[2];
 } Buffer;
 
-
 typedef struct {
-    Buffer *buffer;
-    int arg3;
-    char * fd;
+    Buffer *readBuffer;
+    Buffer *writeBuffer;
 } Parcel;
 
 //init
-void initBuffer(char * type, int size, int arg3, char * testFile, Parcel * parcel);
+void initBuffer(char * type, int size, int argn, char * testFile, Buffer * buf);
+void initParcel(Buffer* readBuffer, Buffer* writeBuffer);
 
 //writes
 void asyncWrite (Buffer * buffer, char * item);

@@ -12,9 +12,8 @@ void gnuplot(void * arg);
 
 void *tapplot_function(void *arg){
     printf("Tapplot thread made! \n");
-    Parcel *arguemnts = (Parcel *)arg;
-    Buffer *buffer = arguemnts->buffer;
-    int arg3 = arguemnts->arg3;
+    Buffer *buffer = (Buffer *)arg;
+    int argn = buffer->argn;
 
     //printf("Observe BUFF: %p\n", &buffer);
     printf("CHECKING: Tapplot BUFF ISASYNC: %d\n", buffer->isAsync);
@@ -48,7 +47,7 @@ void *tapplot_function(void *arg){
             break;
         }
         if (data != NULL) {
-            processAndPlotData(data, gnuplotPipe, arg3, idx);            
+            processAndPlotData(data, gnuplotPipe, argn, idx);            
         }
     }
 

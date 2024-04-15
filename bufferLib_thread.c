@@ -16,12 +16,10 @@ typedef struct {
     char data[MAX_STRINGS][MAX_STRING_LINES];
     int size;
     int isAsync;
+    int argn;
     // Used only for ring bufs
     int in;
     int out;
-    pthread_mutex_t mutex;
-    pthread_cond_t slotsEmptyCond;
-    pthread_cond_t slotsFullCond;
     // Used only for async bufs
     int latest;
     int reading;
@@ -29,32 +27,22 @@ typedef struct {
 } Buffer;
 
 typedef struct {
-    Buffer *buffer;
-    int arg3;
-    char * fd;
+    Buffer *readBuffer;
+    Buffer *writeBuffer;
 } Parcel;
 
-void initBuffer(char * type, int size, int arg3, char * testFile, Parcel * parcel) {
+void initBuffer(char * type, int size, int argn, char * testFile, Buffer * buf) {
 
     printf("Entered initBuffer\n");
-
-    Buffer * buf = malloc(sizeof(Buffer));
-    printf("1\n");
     buf->in = 0;
-    printf("2\n");
     buf->out = 0;
-    printf("3\n");
     buf->size = size;
-    printf("4\n");
     buf->isAsync = 0;
-    printf("5\n");
     buf->latest = 0;
-    printf("6\n");
     buf->reading = 0;
-    printf("7\n");
     buf->slots[0] = 0;
-    printf("8\n");
-    buf->slots[1] = 0;
+    buf->slots[1] = 0;    
+    buf->argn = argn;
 
 
     // convert type to integer
@@ -94,19 +82,6 @@ void initBuffer(char * type, int size, int arg3, char * testFile, Parcel * parce
             exit(1);
         }
     } */
-
-    printf("Initated and allocated buf data\n");
-
-    if (pthread_mutex_init(&buf->mutex, NULL) != 0) {
-        perror("pthread_mutex_init failed");
-        exit(EXIT_FAILURE);
-    }
-
-    if (pthread_cond_init(&buf->slotsEmptyCond, NULL) != 0 ||
-        pthread_cond_init(&buf->slotsFullCond, NULL) != 0) {
-        perror("pthread_cond_init failed");
-        exit(EXIT_FAILURE);
-    } 
 
 /*     Buffer buf;
     buf.in = 0;
@@ -169,25 +144,12 @@ void initBuffer(char * type, int size, int arg3, char * testFile, Parcel * parce
         exit(EXIT_FAILURE);
     } */
 
-    printf("INITBUFF BEFORE PARCEL: testFile :  %s\n", testFile);
+}
 
-    parcel->buffer = buf; 
-    printf ("Parsed and added Buff with its isAsync: %d \n", parcel->buffer->isAsync);
-    parcel->arg3 = arg3;
-    parcel->fd = testFile; 
-    // Init Parcel
-    printf("hi\n");
-    printf("INITBUFF: buf address = %p\n", &buf);
-    //parcel->buffer = buf;
-    printf("hi\n");
-    printf("INITBUFF: parcel. buffer = %p\n", parcel->buffer);
-    //parcel->arg3 = arg3;
-    printf("INITBUFF: parcel-> arg3 = %d\n", parcel->arg3);
-    //parcel->fd = testFile;
-
-    printf("INITBUFF: parcel->fd = %s\n", parcel->fd);
-    printf("Made the parcel\n");
-
+void initParcel(Buffer* readBuffer, Buffer* writeBuffer){
+    Parcel * parcel = malloc(sizeof(Parcel));
+    parcel->readBuffer = readBuffer;
+    parcel->writeBuffer = writeBuffer;
 }
 
 void asyncWrite (Buffer * buffer, char * item) {
@@ -218,30 +180,16 @@ char * asyncRead (Buffer * buffer) {
 
 void ringWrite(Buffer *buffer, char *item) {
     fprintf(stderr, "STARTING RING WRITE\n");
-    pthread_mutex_lock(&buffer->mutex);
-    while (((buffer->in + 1) % buffer->size) == buffer->out) {
-        // Buffer is full, wait for space to become available
-        fprintf(stderr, "RING: FULL BUFF\n");
-        pthread_cond_wait(&buffer->slotsEmptyCond, &buffer->mutex);
-    }
 
     fprintf(stderr, "RING: PASSED MUTEX, NOW WRITING\n");
     // Put value into the buffer
     strncpy(buffer->data[buffer->in], item, 99);
     buffer->in = (buffer->in + 1) % buffer->size;
-    fprintf(stderr, "RING: DID WRITING\n");
-    
-    pthread_cond_signal(&buffer->slotsFullCond);
-    pthread_mutex_unlock(&buffer->mutex);
+
     fprintf(stderr, "FIN RING WRITE\n");
 }
 
 char *ringRead(Buffer *buffer) {
-    pthread_mutex_lock(&buffer->mutex);
-    while (buffer->out == buffer->in) {
-        // Buffer is empty, wait for data to become available
-        pthread_cond_wait(&buffer->slotsFullCond, &buffer->mutex);
-    }
     
     char *result = malloc(100);
     if (result == NULL) {
@@ -250,9 +198,6 @@ char *ringRead(Buffer *buffer) {
     }
     strncpy(result, buffer->data[buffer->out], 99);
     buffer->out = (buffer->out + 1) % buffer->size;
-    
-    pthread_cond_signal(&buffer->slotsEmptyCond);
-    pthread_mutex_unlock(&buffer->mutex);
     
     return result;
 }

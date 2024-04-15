@@ -59,21 +59,11 @@ void *observe_function(void* arg) {
         }
     }
 
-    Parcel *arguemnts = (Parcel *)arg;
-    printf("arguemnts isAsync = %d\n", arguemnts->buffer->isAsync);
-    Buffer *buffer = arguemnts->buffer;
-    char * testFile = arguemnts->fd;
+    Buffer *buffer = (Buffer *)arg;
+    printf("buffer isAsync = %d\n", buffer->isAsync);
 
     //printf("Observe BUFF: %p\n", &buffer);
     printf("CHECKING: Observe BUFF ISASYNC: %d\n", buffer->isAsync);
-    printf("CHECKING: Observe BUFF TESTFILE: %s\n", arguemnts->fd);
-
-    FILE *fp;
-    if(testFile != "standardOut") {
-        fp = fopen(testFile, "r");
-    }else {
-        fp = stdin;
-    }
 
     printf("OBSRVE: CHECKING FILE OPENED");
 
@@ -82,7 +72,7 @@ void *observe_function(void* arg) {
     char lastValue[MAX_VALUE_LEN] = {0};
 
     // loop to read from stdin
-    while (fgets(line, MAX_LINE_LEN, fp) != NULL){
+    while (fgets(line, MAX_LINE_LEN, stdin) != NULL){
         // parse the line
         // remove newline character
         line[strcspn(line, "\n")] = 0;

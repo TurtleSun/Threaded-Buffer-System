@@ -12,7 +12,6 @@
 #define MAX_NAME_LEN 50
 #define MAX_VALUE_LEN 50
 
-
 /* // Structs for buff
 typedef struct {
     char **data;
@@ -45,9 +44,9 @@ int main(int argc, char *argv[]) {
     char *tasks[MAX_TASK_SIZE]; // Array to hold task information
     char * testFile = "standardOut";
     char * theSync;
-    Parcel *parcel;
-
-    parcel = malloc(sizeof(Parcel));
+    Parcel *parcel = malloc(sizeof(Parcel));
+    Buffer *buf1 = malloc(sizeof(Buffer));
+    Buffer *buf2 = malloc(sizeof(Buffer));
 
     for (int i = 1; i < argc; i++){
         printf("\n");
@@ -97,13 +96,14 @@ int main(int argc, char *argv[]) {
     printf("This is my saved testFile: %s\n", testFile);
     printf("Just finished parsing args...\n");
 
-    initBuffer(theSync, buff_size, argn, testFile, parcel);
+    initBuffer(theSync, buff_size, argn, testFile, buf1);
+    initBuffer(theSync, buff_size, argn, testFile, buf2);
+    initParcel(buf1, buf2);
                 //parcel = initBuffer("sync", buff_size, argn, testFile);
-    printf("hi");
 
-    printf("This is outside of initBuf isAsync test in parcel: %d\n", parcel->buffer->isAsync);
-    printf("This is outside of initBuf argn test in parcel: %d\n", parcel->arg3);
-    printf("This is outside of initBuf testFile name test in parcel: %s\n", parcel->fd);
+    //printf("This is outside of initBuf isAsync test in parcel: %d\n", parcel->buffer->isAsync);
+    //printf("This is outside of initBuf argn test in parcel: %d\n", parcel->arg3);
+    //printf("This is outside of initBuf testFile name test in parcel: %s\n", parcel->fd);
 
 
     printf("Number of num_tasks: %d\n", num_tasks);
@@ -115,14 +115,14 @@ int main(int argc, char *argv[]) {
 
         if (strcmp(task_name, "observe") == 0){
             printf("Running creations of observer");
-            pthread_create(&threads[i], NULL, observe_function, parcel);
+            pthread_create(&threads[i], NULL, observe_function, buf1);
         } else if (strcmp(task_name, "reconstruct") == 0){
             pthread_create(&threads[i], NULL, reconstruct_function, parcel);
         } else if (strcmp(task_name, "tapplot") == 0){
-            pthread_create(&threads[i], NULL, tapplot_function, parcel);
+            pthread_create(&threads[i], NULL, tapplot_function, buf2);
         } else {
             printf("SOMETHING WRONG HAPPENED\n");
-            pthread_create(&threads[i], NULL, task_function, parcel);
+            //pthread_create(&threads[i], NULL, task_function, parcel);
         }
 
     }
