@@ -27,12 +27,12 @@ void *tapplot_function(void *arg){
     }
 
     // Prepare Gnuplot
-    fprintf(gnuplotPipe, "set term png\n");
+/*     fprintf(gnuplotPipe, "set term png\n");
     fprintf(gnuplotPipe, "set output 'output.png'\n");
     fprintf(gnuplotPipe, "set title 'Data Plot'\n");
     fprintf(gnuplotPipe, "set xlabel 'Sample Number'\n");
     fprintf(gnuplotPipe, "set ylabel 'Value'\n");
-    fprintf(gnuplotPipe, "plot '-' using 1:2 with lines title 'Field %d'\n", 0);
+    fprintf(gnuplotPipe, "plot '-' using 1:2 with lines title 'Field %d'\n", 0); */
       
 
     int idx = -1;
@@ -40,6 +40,9 @@ void *tapplot_function(void *arg){
         idx++;
         char* data = readBuffer(buffer);
         printf("TAPPLOT: Here is what the buffer game me: %s\n", data);
+        if (data == NULL || strcmp(data, "") == 0){
+            continue;
+        }
         // check for END marker symbolizing no more data to read
         if (strcmp(data, "END_OF_DATA") == 0) {
             break;
@@ -62,8 +65,9 @@ void *tapplot_function(void *arg){
 // processAndPlotData function
 void processAndPlotData(char* data, FILE* gnuplotPipe, int argn, int sampleNumber) {
     // Parse the data into name and value
-    for (int i = 0; i < argn; i++) {
-        data = strtok(data, ",");
+    data = strtok(data, ",");
+    for (int i = 1; i < argn; i++) {
+        data = strtok(NULL, ",");
     }
     Pair pair;
     parseData(data, &pair);

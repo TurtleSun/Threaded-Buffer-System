@@ -60,6 +60,7 @@ void *observe_function(void* arg) {
     }
 
     Parcel *arguemnts = (Parcel *)arg;
+    printf("arguemnts isAsync = %d\n", arguemnts->buffer->isAsync);
     Buffer *buffer = arguemnts->buffer;
     char * testFile = arguemnts->fd;
 
@@ -68,7 +69,7 @@ void *observe_function(void* arg) {
     printf("CHECKING: Observe BUFF TESTFILE: %s\n", arguemnts->fd);
 
     FILE *fp;
-    if(testFile != "1") {
+    if(testFile != "standardOut") {
         fp = fopen(testFile, "r");
     }else {
         fp = stdin;
@@ -89,7 +90,7 @@ void *observe_function(void* arg) {
         char* name = strtok(line, "=");
         printf("JUST STRTOKED (name): %s\n", name);
         char* value = strtok(NULL, "");
-        printf("JUST STRTOKED (value): %s\n", name);
+        printf("JUST STRTOKED (value): %s\n", value);
 
         // if the line is malformed
         if (name == NULL || value == NULL){

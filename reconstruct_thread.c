@@ -62,11 +62,12 @@ void *reconstruct_function(void *arg){
         if (strcmp(dataObs, "END_OF_DATA") == 0) {
             break;
         }
-        if (dataObs != NULL || strstr(dataObs, "=") != NULL) {
+        if (dataObs != NULL || strcmp(dataObs, "") != 0) {
 
             printf("RECONSTRUCT : Here is dataObs: %s\n", dataObs);
 
             parseData(dataObs, &parsedData);
+
             if (strcmp(knownValues.endName, "") == 0 && nameInKnownVals(&knownValues, parsedData.name) == 1) {
                 char sample[100];
                 compileSample(&knownValues, sample); 
@@ -144,6 +145,8 @@ void compileSample(KnownValues *values, char sample[]) {
         strcat(sample, values->pairs[i].name);
         strcat(sample, "=");
         strcat(sample, values->pairs[i].value);
+
+        fprintf(stderr, "RECONSTRUCT SAMPLE COMPLE: %s\n", sample);
 
         // Add a comma if it's not the last pair
         if (i < values->count - 1) {

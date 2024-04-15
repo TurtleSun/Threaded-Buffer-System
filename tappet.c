@@ -28,13 +28,6 @@ typedef struct {
 // Function prototypes
 void * task_function(void *arg);
 
-// Define global variables for synchronization
-int num_tasks = 0;
-int buff_size;
-char *tasks[MAX_TASK_SIZE]; // Array to hold task information
-char * testFile;
-Parcel *parcel;
-
 int main(int argc, char *argv[]) {
     // Parse command line arguments to extract tasks, buffering type, and size
     // Example: tappet -t1 observe -t2 reconstruct -t3 tapplot <optional arg3> -b async <optional testFile> 
@@ -45,21 +38,27 @@ int main(int argc, char *argv[]) {
     // Initialize buffer
     printf("Just got in main. \n");
     printf("number of arguments: %d\n", argc);
-    printf("argv 1: %s\n", argv[1]);
-    printf("\n");
 
     int argn = 1; // default for tapplot to print
+    int num_tasks = 0;
+    int buff_size;
+    char *tasks[MAX_TASK_SIZE]; // Array to hold task information
+    char * testFile = "standardOut";
+    char * theSync;
+    Parcel *parcel;
 
-    for (int i = 1; i < argc-1; i++) {
+    parcel = malloc(sizeof(Parcel));
+
+    for (int i = 1; i < argc; i++){
         printf("\n");
         printf("inside the for loop! \n");
-        printf("argv %d: %s\n", i+1, argv[i+1]);
+        printf("argv %d = %s\n", i, argv[i]);
         printf("\n");
 
-        if (strcmp(argv[i], "-t") == 0) {
+        int j = i + 1;
 
+        if (strcmp(argv[i], "-t1") == 0 || strcmp(argv[i], "-t2") == 0 || strcmp(argv[i], "-t3") == 0){
             num_tasks = num_tasks + 1;
-
             tasks[num_tasks - 1] = argv[i+1];
 
             printf("\n");
@@ -67,88 +66,55 @@ int main(int argc, char *argv[]) {
             printf("\n");
 
         } else if (strcmp(argv[i], "-b") == 0) {
-
-            int j = i + 1;
-
-            if (!(strcmp(argv[i-2], "-t") == 0)){ // Check if arg3 happens
-
-                argn = atoi(argv[i-1]);
-                
-                printf("\n");
-                printf("ARGN: We've saved %s as plotting col\n", argv[i-1]);
-                printf("\n");
-
-            }
-
             if (strcmp(argv[j], "async") == 0) {
 
+                theSync = "async";
                 buff_size = 4;
 
                 if (i+1 != argc-1){ // async isn't last arg, must be optional test-file
                     testFile = argv[j+1];
-                } else {
-                    testFile = "1";
                 }
-
-                printf("About to initBuff\n");
-                printf("ASYNC BEFORE: We've initBuffer as %s\n", argv[j]);
-
-                initBuffer("async", buff_size, argn, testFile, parcel);
-
-                printf("Came back from initBuff\n");
-
-                printf("\n");
-
-                // THIS IS WHERE THE SEG FAULT HAPPENS
-                //printf("Trying to find out what wrong: %s\n", argv[i]);
-                printf("ASYNC AFTER: We've initBuffer as %s\n", argv[j]);
-
-                printf("This is my saved testFile: %s\n", testFile);
-                printf("This is saved testFile in parcel: %s\n", parcel->fd);
-                printf("\n");
-                break;
-
-            } else if (strstr(argv[i+1], "sync") != NULL) {
+            } else if (strcmp(argv[i+1], "sync") == 0) {
                 
-                int j = i + 1;
-
-                if (j == argc -1) { // sync is the last argument
-                    buff_size = 1;
-                    testFile = "1";
-                } else if (strstr(argv[j], "-s")) { // there is optional size arg
+                theSync = "sync";
+                if (strcmp(argv[j+1], "-s") == 0) {
                     buff_size = atoi(argv[j+1]);
-                    if (j+1 != argc-1){ // size is not last arg
-                        // must be test-file
-                        testFile = argv[j+2];
-                    } else {
-                        testFile = "1";
-                    }
-                } else { // no optinal size then must be optional test-file
-                    testFile = argv[j+1];
+                } else {
+                    buff_size = 1;
                 }
-                
-                initBuffer("sync", buff_size, argn, testFile, parcel);
-                //parcel = initBuffer("sync", buff_size, argn, testFile);
-
-                printf("\n");
-                printf("SYNC: We've initBuffer as %s\n", argv[i+1]);
-                printf("This is my saved testFile: %s\n", testFile);
-                printf("\n");
-                break;
+            }
+        } else {
+            if (strcmp(argv[i], "-t1") == 0 || strcmp(argv[i], "-t2") == 0 || strcmp(argv[i], "-t3") == 0) {
+                // its an optional argn
+                argn = atoi(argv[i]);
+            } else {
+                // Otherwise only option is last argument, aka testFile
+                testFile = argv[i];
             }
         }
     }
 
+    printf("This is my saved testFile: %s\n", testFile);
     printf("Just finished parsing args...\n");
 
-    printf("This is outside loop testFile in parcel: %s\n", parcel->fd);
+    initBuffer(theSync, buff_size, argn, testFile, parcel);
+                //parcel = initBuffer("sync", buff_size, argn, testFile);
+    printf("hi");
 
+    printf("This is outside of initBuf isAsync test in parcel: %d\n", parcel->buffer->isAsync);
+    printf("This is outside of initBuf argn test in parcel: %d\n", parcel->arg3);
+    printf("This is outside of initBuf testFile name test in parcel: %s\n", parcel->fd);
+
+
+    printf("Number of num_tasks: %d\n", num_tasks);
     // Create threads for each task
-    pthread_t threads[num_tasks];
-    for (int i = 0; i < num_tasks; i++) {
+    pthread_t threads[3];
+    for (int i = 0; i < 3; i++) {
         char *task_name = tasks[i];
+        printf("Enters threaded for looop.\n");
 
         if (strcmp(task_name, "observe") == 0){
+            printf("Running creations of observer");
             pthread_create(&threads[i], NULL, observe_function, parcel);
         } else if (strcmp(task_name, "reconstruct") == 0){
             pthread_create(&threads[i], NULL, reconstruct_function, parcel);

@@ -7,9 +7,13 @@
 #include <getopt.h>
 #include <pthread.h>
 
+#define DELAY 5E4
+#define MAX_STRING_LINES 100
+#define MAX_STRINGS 100
+
 typedef struct {
     // Used for all bufs
-    char ** data;
+    char data[MAX_STRINGS][MAX_STRING_LINES];
     int size;
     int isAsync;
     // Used only for ring bufs
@@ -30,28 +34,36 @@ typedef struct {
     char * fd;
 } Parcel;
 
-void initBuffer(char * type, int size, int arg3, char * testFile, Parcel *parcel) {
+void initBuffer(char * type, int size, int arg3, char * testFile, Parcel * parcel) {
 
     printf("Entered initBuffer\n");
 
-    Buffer *buf;
+    Buffer * buf = malloc(sizeof(Buffer));
+    printf("1\n");
     buf->in = 0;
+    printf("2\n");
     buf->out = 0;
+    printf("3\n");
     buf->size = size;
+    printf("4\n");
     buf->isAsync = 0;
+    printf("5\n");
     buf->latest = 0;
+    printf("6\n");
     buf->reading = 0;
+    printf("7\n");
     buf->slots[0] = 0;
+    printf("8\n");
     buf->slots[1] = 0;
-    //pthread_mutex_init(&buf.mutex, NULL);
+
 
     // convert type to integer
 
     //printf("\n");
-    //printf ("I get to initBuffer \n");
+    printf ("I get to initBuffer \n");
     //printf ("Here is type: %s\n", type);
 
-    if (strstr(type, "async") != NULL) {
+    if (strcmp(type, "async") == 0) {
         buf->isAsync = 1;
         buf->size = 4;
     } else if (strcmp(type, "sync") == 0) {
@@ -67,7 +79,7 @@ void initBuffer(char * type, int size, int arg3, char * testFile, Parcel *parcel
 
     printf ("Parsed and initated buf.isAsync: %d and buf.size: %d \n", buf->isAsync, buf->size);
 
-    // Allocate data pointers
+/*     // Allocate data pointers
     buf->data = (char **)malloc(sizeof(char *) * buf->size);
     if (!buf->data) {
         perror("malloc for data pointers failed");
@@ -81,7 +93,7 @@ void initBuffer(char * type, int size, int arg3, char * testFile, Parcel *parcel
             fprintf(stderr, "malloc error");
             exit(1);
         }
-    }
+    } */
 
     printf("Initated and allocated buf data\n");
 
@@ -94,28 +106,99 @@ void initBuffer(char * type, int size, int arg3, char * testFile, Parcel *parcel
         pthread_cond_init(&buf->slotsFullCond, NULL) != 0) {
         perror("pthread_cond_init failed");
         exit(EXIT_FAILURE);
+    } 
+
+/*     Buffer buf;
+    buf.in = 0;
+    buf.out = 0;
+    buf.size = size;
+    buf.isAsync = 0;
+    buf.latest = 0;
+    buf.reading = 0;
+    buf.slots[0] = 0;
+    buf.slots[1] = 0;
+
+    // convert type to integer
+
+    //printf("\n");
+    //printf ("I get to initBuffer \n");
+    //printf ("Here is type: %s\n", type);
+
+    if (strcmp(type, "async") == 0) {
+        buf.isAsync = 1;
+        buf.size = 4;
+    } else if (strcmp(type, "sync") == 0) {
+        buf.isAsync = 0;
+        if (size <= 0) {
+            fprintf(stderr, "Invalid size for ring buffer!\n");
+            exit(1);
+        }
+    } else {
+        fprintf(stderr, "Invalid type of buffer!\n");
+        exit(1);
     }
+
+    printf ("Parsed and initated buf.isAsync: %d and buf.size: %d \n", buf.isAsync, buf.size);
+
+    // Allocate data pointers
+    buf.data = (char **)malloc(sizeof(char *) * buf.size);
+    if (!buf.data) {
+        perror("malloc for data pointers failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Allocate each string in the buffer
+    for (int i = 0; i < buf.size; i++) {
+        buf.data[i] = malloc(100);
+        if (buf.data[i] == NULL) {
+            fprintf(stderr, "malloc error");
+            exit(1);
+        }
+    }
+
+    printf("Initated and allocated buf data\n");
+
+    if (pthread_mutex_init(&buf.mutex, NULL) != 0) {
+        perror("pthread_mutex_init failed");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pthread_cond_init(&buf.slotsEmptyCond, NULL) != 0 ||
+        pthread_cond_init(&buf.slotsFullCond, NULL) != 0) {
+        perror("pthread_cond_init failed");
+        exit(EXIT_FAILURE);
+    } */
 
     printf("INITBUFF BEFORE PARCEL: testFile :  %s\n", testFile);
 
-    //Parcel * parcel = {.buffer = buf, .arg3 = arg3, .fd = testFile}; 
-    // Init Parcel
-    parcel->buffer = buf;
+    parcel->buffer = buf; 
+    printf ("Parsed and added Buff with its isAsync: %d \n", parcel->buffer->isAsync);
     parcel->arg3 = arg3;
-    parcel->fd = testFile;
+    parcel->fd = testFile; 
+    // Init Parcel
+    printf("hi\n");
+    printf("INITBUFF: buf address = %p\n", &buf);
+    //parcel->buffer = buf;
+    printf("hi\n");
+    printf("INITBUFF: parcel. buffer = %p\n", parcel->buffer);
+    //parcel->arg3 = arg3;
+    printf("INITBUFF: parcel-> arg3 = %d\n", parcel->arg3);
+    //parcel->fd = testFile;
 
-    printf("INITBUFF: parcel.testFile %s\n", parcel->fd);
+    printf("INITBUFF: parcel->fd = %s\n", parcel->fd);
     printf("Made the parcel\n");
-    //return parcel;
+
 }
 
 void asyncWrite (Buffer * buffer, char * item) {
+    fprintf (stderr,"ASYNCWRITE ITEM PASSED: %s\n", item);
   int pair, index;
   pair = !buffer->reading;
   index = !buffer->slots[pair]; // Avoids last written slot in this pair, which reader may be reading.
   strncpy(buffer->data[index + (2*pair)], item, 99); // Copy item to data slot. Hardcoded # bytes
   buffer->slots[pair] = index; // Indicates latest data within selected pair.
   buffer->latest = pair; // Indicates pair containing latest data.
+  usleep(DELAY);
 }
 
 char * asyncRead (Buffer * buffer) {
@@ -129,6 +212,7 @@ char * asyncRead (Buffer * buffer) {
     buffer->reading = pair; // Update reading variable to show which pair the reader is reading from.
     index = buffer->slots[pair]; // Get index of pairing to read from
     strncpy(result, buffer->data[index + (2*pair)], 99); // Get desired value from the most recently updated pair.
+    usleep(DELAY);
     return result;
 }
 
