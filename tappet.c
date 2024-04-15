@@ -50,37 +50,47 @@ int main(int argc, char *argv[]) {
 
     int argn = 1; // default for tapplot to print
 
+    parcel = malloc(sizeof(Parcel));
+    if (parcel == NULL) {
+        // Handle memory allocation error
+        exit(EXIT_FAILURE);
+    }
+
     for (int i = 1; i < argc-1; i++) {
         printf("\n");
         printf("inside the for loop! \n");
         printf("argv %d: %s\n", i+1, argv[i+1]);
         printf("\n");
 
-        if (strcmp(argv[i], "-t") == 0) {
+        // compare the first argv which should be -tx where x is a number, compare only the -t 
+        if (strstr(argv[i], "-t") != NULL) {
+            printf("Found a task: %s\n", argv[i+1]);
+            tasks[num_tasks] = argv[i+1];
+            num_tasks++;
+            printf("Number of tasks: %d\n", num_tasks);
+            // print all tasks
+            for (int i = 0; i < num_tasks; i++) {
+                printf("Task %d: %s\n", i, tasks[i]);
+            }
 
-            num_tasks = num_tasks + 1;
-
-            tasks[num_tasks - 1] = argv[i+1];
-
-            printf("\n");
-            printf("TASK: We've saved %s as tasks: %s\n", argv[i+1], tasks[num_tasks - 1]);
-            printf("\n");
-
-        } else if (strcmp(argv[i], "-b") == 0) {
+        printf("argv[i]: %s\n", argv[i]);
+        } else if (strstr(argv[i], "-b") != NULL) {
 
             int j = i + 1;
 
-            if (!(strcmp(argv[i-2], "-t") == 0)){ // Check if arg3 happens
-
+            /*printf("argv[i-1]: %s\n", argv[i-1]);
+            if (!(strstr(argv[i-1], "-t") != NULL)){ // Check if arg3 happens
+                printf("HUUUUH???");
                 argn = atoi(argv[i-1]);
                 
                 printf("\n");
                 printf("ARGN: We've saved %s as plotting col\n", argv[i-1]);
                 printf("\n");
 
-            }
+            }*/
 
-            if (strcmp(argv[j], "async") == 0) {
+            printf("argv[j]: %s\n", argv[j]);
+            if (strstr(argv[j], "async") != NULL) {
 
                 buff_size = 4;
 
@@ -109,12 +119,13 @@ int main(int argc, char *argv[]) {
                 break;
 
             } else if (strstr(argv[i+1], "sync") != NULL) {
-                
+                printf("argv[i+1]: %s\n", argv[i+1]);
                 int j = i + 1;
 
                 if (j == argc -1) { // sync is the last argument
                     buff_size = 1;
                     testFile = "1";
+                    printf("argv[j]: %s\n", argv[j]);
                 } else if (strstr(argv[j], "-s")) { // there is optional size arg
                     buff_size = atoi(argv[j+1]);
                     if (j+1 != argc-1){ // size is not last arg
@@ -127,6 +138,7 @@ int main(int argc, char *argv[]) {
                     testFile = argv[j+1];
                 }
                 
+                printf("weve init buffer size as %d\n", buff_size);
                 initBuffer("sync", buff_size, argn, testFile, parcel);
                 //parcel = initBuffer("sync", buff_size, argn, testFile);
 
@@ -143,10 +155,13 @@ int main(int argc, char *argv[]) {
 
     printf("This is outside loop testFile in parcel: %s\n", parcel->fd);
 
+    printf("This is the number of tasks: %d\n", num_tasks);
     // Create threads for each task
     pthread_t threads[num_tasks];
     for (int i = 0; i < num_tasks; i++) {
         char *task_name = tasks[i];
+
+        printf("TASK NAME: %s\n", task_name);
 
         if (strcmp(task_name, "observe") == 0){
             pthread_create(&threads[i], NULL, observe_function, parcel);

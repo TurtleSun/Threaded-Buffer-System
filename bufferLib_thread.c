@@ -30,11 +30,11 @@ typedef struct {
     char * fd;
 } Parcel;
 
-void initBuffer(char * type, int size, int arg3, char * testFile, Parcel *parcel) {
+void initBuffer(char * type, int size, int arg3, char * testFile, Parcel * parcel) {
 
     printf("Entered initBuffer\n");
 
-    Buffer *buf;
+    Buffer * buf;
     buf->in = 0;
     buf->out = 0;
     buf->size = size;
@@ -50,13 +50,16 @@ void initBuffer(char * type, int size, int arg3, char * testFile, Parcel *parcel
     //printf("\n");
     //printf ("I get to initBuffer \n");
     //printf ("Here is type: %s\n", type);
+    // printf whats inside buff
 
     if (strstr(type, "async") != NULL) {
         buf->isAsync = 1;
         buf->size = 4;
-    } else if (strcmp(type, "sync") == 0) {
+    } else if (strstr(type, "sync") != NULL) {
         buf->isAsync = 0;
-        if (size <= 0) {
+        printf("Size: %d\n", buf->size);
+        if (buf->size <= 0) {
+            printf("Size: %d\n", size);
             fprintf(stderr, "Invalid size for ring buffer!\n");
             exit(1);
         }
@@ -100,7 +103,10 @@ void initBuffer(char * type, int size, int arg3, char * testFile, Parcel *parcel
 
     //Parcel * parcel = {.buffer = buf, .arg3 = arg3, .fd = testFile}; 
     // Init Parcel
+    printf("buf: %p\n", buf);
+    printf("parcel->buffer: %p\n", parcel->buffer);
     parcel->buffer = buf;
+    printf("INITBUFF: parcel.buffer->isAsync %d\n", parcel->buffer->isAsync);
     parcel->arg3 = arg3;
     parcel->fd = testFile;
 

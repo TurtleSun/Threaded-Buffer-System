@@ -1,5 +1,5 @@
 #ifndef BUFFERLIB_THREAD
-#define BUFFERLIB_THREAD_H
+#define BUFFERLIB_THREAD .H
 
 typedef struct {
     // Used for all bufs
@@ -9,6 +9,9 @@ typedef struct {
     // Used only for ring bufs
     int in;
     int out;
+    pthread_mutex_t mutex;
+    pthread_cond_t slotsEmptyCond;
+    pthread_cond_t slotsFullCond;
     // Used only for async bufs
     int latest;
     int reading;
