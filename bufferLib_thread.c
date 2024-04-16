@@ -32,8 +32,6 @@ typedef struct {
 } Parcel;
 
 void initBuffer(char * type, int size, int argn, char * testFile, Buffer * buf) {
-
-    printf("Entered initBuffer\n");
     buf->in = 0;
     buf->out = 0;
     buf->size = size;
@@ -43,13 +41,6 @@ void initBuffer(char * type, int size, int argn, char * testFile, Buffer * buf) 
     buf->slots[0] = 0;
     buf->slots[1] = 0;    
     buf->argn = argn;
-
-
-    // convert type to integer
-
-    //printf("\n");
-    printf ("I get to initBuffer \n");
-    //printf ("Here is type: %s\n", type);
 
     if (strcmp(type, "async") == 0) {
         buf->isAsync = 1;
@@ -64,85 +55,6 @@ void initBuffer(char * type, int size, int argn, char * testFile, Buffer * buf) 
         fprintf(stderr, "Invalid type of buffer!\n");
         exit(1);
     }
-
-    printf ("Parsed and initated buf.isAsync: %d and buf.size: %d \n", buf->isAsync, buf->size);
-
-/*     // Allocate data pointers
-    buf->data = (char **)malloc(sizeof(char *) * buf->size);
-    if (!buf->data) {
-        perror("malloc for data pointers failed");
-        exit(EXIT_FAILURE);
-    }
-
-    // Allocate each string in the buffer
-    for (int i = 0; i < buf->size; i++) {
-        buf->data[i] = malloc(100);
-        if (buf->data[i] == NULL) {
-            fprintf(stderr, "malloc error");
-            exit(1);
-        }
-    } */
-
-/*     Buffer buf;
-    buf.in = 0;
-    buf.out = 0;
-    buf.size = size;
-    buf.isAsync = 0;
-    buf.latest = 0;
-    buf.reading = 0;
-    buf.slots[0] = 0;
-    buf.slots[1] = 0;
-
-    // convert type to integer
-
-    //printf("\n");
-    //printf ("I get to initBuffer \n");
-    //printf ("Here is type: %s\n", type);
-
-    if (strcmp(type, "async") == 0) {
-        buf.isAsync = 1;
-        buf.size = 4;
-    } else if (strcmp(type, "sync") == 0) {
-        buf.isAsync = 0;
-        if (size <= 0) {
-            fprintf(stderr, "Invalid size for ring buffer!\n");
-            exit(1);
-        }
-    } else {
-        fprintf(stderr, "Invalid type of buffer!\n");
-        exit(1);
-    }
-
-    printf ("Parsed and initated buf.isAsync: %d and buf.size: %d \n", buf.isAsync, buf.size);
-
-    // Allocate data pointers
-    buf.data = (char **)malloc(sizeof(char *) * buf.size);
-    if (!buf.data) {
-        perror("malloc for data pointers failed");
-        exit(EXIT_FAILURE);
-    }
-
-    // Allocate each string in the buffer
-    for (int i = 0; i < buf.size; i++) {
-        buf.data[i] = malloc(100);
-        if (buf.data[i] == NULL) {
-            fprintf(stderr, "malloc error");
-            exit(1);
-        }
-    }
-
-    printf("Initated and allocated buf data\n");
-
-    if (pthread_mutex_init(&buf.mutex, NULL) != 0) {
-        perror("pthread_mutex_init failed");
-        exit(EXIT_FAILURE);
-    }
-
-    if (pthread_cond_init(&buf.slotsEmptyCond, NULL) != 0 ||
-        pthread_cond_init(&buf.slotsFullCond, NULL) != 0) {
-        perror("pthread_cond_init failed");
-        exit(EXIT_FAILURE);
-    } */
 
 }
 
@@ -197,29 +109,16 @@ char *ringRead(Buffer *buffer) {
 
 char * readBuffer (Buffer * buffer) {
     if (buffer->isAsync == 1) {
-        //printf("READ BUFF: GOOD\n");
         return asyncRead(buffer);
     } else {
-        //printf("READ BUFF: BAD\n");
         return ringRead(buffer);
     }
 }
 
 void writeBuffer (Buffer * buffer, char * item) {
     if (buffer->isAsync == 1) {
-        //printf("WRITE BUFF: Am I writing %s\n", item);
         asyncWrite(buffer, item);
     } else {
         ringWrite(buffer, item);
     }
 }
-
-//Fake main function for testing purposes.
-/*int main(int argc, char ** argv) {
-    Buffer myBuf = initBuffer(argc, argv);
-    writeBuffer(&myBuf, "hello");
-    writeBuffer(&myBuf, "World!");
-    char * result = readBuffer(&myBuf);
-    printf("%s", result);
-    return 0;
-}*/

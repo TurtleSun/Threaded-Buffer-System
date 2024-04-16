@@ -35,10 +35,6 @@ typedef struct {
     int count;
 } Pair;
 
-// array to hold the last known values
-//Pair lastKnownValues[MAX_UNIQUE_NAMES];
-//int uniqueNames = 0;
-
 typedef struct {
     Pair pairs[MAX_UNIQUE_NAMES];
     // extra field to hold the count of unique names
@@ -82,10 +78,6 @@ int main(int argc, char *argv[]) {
     // initialize a pair to hold the parsed data
     Pair parsedData;
 
-    ///////////////////// READING FROM OBSERVE
-    // read from shared memory between observe and reconstruct and reconstruct the data logic in separate function
-    // while reading flag is 0 then the data is not ready to read
-
     // reading from the buffer 
     // process data from obsrecBuffer, data observe wrote
     while (true){
@@ -102,7 +94,6 @@ int main(int argc, char *argv[]) {
                 writeBuffer(rectapBuffer, sample);
             }
             updateLastKnownValues(&parsedData, &knownValues);
-            //findEndName(&knownValues);
             // if we have found the end name, compile the sample
             if (strcmp(parsedData.name, knownValues.endName) == 0) {
                 char sample[100];

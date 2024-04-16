@@ -11,12 +11,8 @@ void processAndPlotData(char* data, FILE* gnuplotPipe, int argn, int sampleNumbe
 void gnuplot(void * arg);
 
 void *tapplot_function(void *arg){
-    printf("Tapplot thread made! \n");
     Buffer *buffer = (Buffer *)arg;
     int argn = buffer->argn;
-
-    //printf("Observe BUFF: %p\n", &buffer);
-    printf("CHECKING: Tapplot BUFF ISASYNC: %d\n", buffer->isAsync);
 
 // Open a pipe to gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
@@ -25,20 +21,10 @@ void *tapplot_function(void *arg){
         exit(EXIT_FAILURE);
     }
 
-    // Prepare Gnuplot
-/*     fprintf(gnuplotPipe, "set term png\n");
-    fprintf(gnuplotPipe, "set output 'output.png'\n");
-    fprintf(gnuplotPipe, "set title 'Data Plot'\n");
-    fprintf(gnuplotPipe, "set xlabel 'Sample Number'\n");
-    fprintf(gnuplotPipe, "set ylabel 'Value'\n");
-    fprintf(gnuplotPipe, "plot '-' using 1:2 with lines title 'Field %d'\n", 0); */
-      
-
     int idx = -1;
     while (1){
         idx++;
         char* data = readBuffer(buffer);
-        printf("TAPPLOT: Here is what the buffer game me: %s\n", data);
         if (data == NULL || strcmp(data, "") == 0){
             continue;
         }
@@ -53,7 +39,7 @@ void *tapplot_function(void *arg){
 
     // finalize Gnuplot plot
     // tell Gnuplot we're done sending data
-    fprintf(gnuplotPipe, "e\n");
+    //fprintf(gnuplotPipe, "e\n");
     fflush(gnuplotPipe);
 
     pclose(gnuplotPipe);
@@ -73,8 +59,6 @@ void processAndPlotData(char* data, FILE* gnuplotPipe, int argn, int sampleNumbe
 
     // Here, we assume that argn is the index of the value to be plotted
     char *value = pair.value; // Default value to be plotted
-    printf("This is data to be plotted %s\n", value);
-    // You might need to update this value based on the value at index argn in the pair
 
     // Open a file to write the data
     FILE *dataFile = fopen("plot_data.txt", "a");

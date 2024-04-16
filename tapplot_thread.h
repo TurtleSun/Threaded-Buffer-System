@@ -1,4 +1,4 @@
-#define TAPPLOT_THREAD_H
+#define TAPPLOT_THREAD .H
 
 #include <stdio.h>
 #include <string.h>

@@ -1,10 +1,9 @@
-#define OBSERVE_THREAD_H
+#define OBSERVE_THREAD .H
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
-//#include "bufferLib_thread.h"
 
 struct Pair {
     char * name;
@@ -16,6 +15,4 @@ struct PairList {
     int numPairs;
 };
 
-//struct PairList updateLastKnown(struct PairList pairlist, char * name, char * newVal);
-//char * getLastKnown(struct PairList pairlist, char * name);
 void *observe_function(void* arg);

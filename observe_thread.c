@@ -48,8 +48,6 @@ char * getLastKnown(struct PairList pairlist, char * name) {
 }
 
 void *observe_function(void* arg) {
-    printf("Observe thread made!\n");
-
     for (int i = 0; i < 10; i++) {
         pairlist.pairs[i].name = malloc(100);
         pairlist.pairs[i].value = malloc(100);
@@ -60,12 +58,6 @@ void *observe_function(void* arg) {
     }
 
     Buffer *buffer = (Buffer *)arg;
-    printf("buffer isAsync = %d\n", buffer->isAsync);
-
-    //printf("Observe BUFF: %p\n", &buffer);
-    printf("CHECKING: Observe BUFF ISASYNC: %d\n", buffer->isAsync);
-
-    printf("OBSRVE: CHECKING FILE OPENED");
 
     // read and parse from either a file or stdin
     char line[MAX_LINE_LEN];
@@ -78,9 +70,7 @@ void *observe_function(void* arg) {
         line[strcspn(line, "\n")] = 0;
         // split the line into name and value
         char* name = strtok(line, "=");
-        printf("JUST STRTOKED (name): %s\n", name);
         char* value = strtok(NULL, "");
-        printf("JUST STRTOKED (value): %s\n", value);
 
         // if the line is malformed
         if (name == NULL || value == NULL){
@@ -88,27 +78,16 @@ void *observe_function(void* arg) {
             continue;
         }
 
-        // print line
-        printf("name: %s, value: %s\n", name, value);
-
         // compare current value with last value, if they are different write value in shared memory
         if(strcmp(getLastKnown(pairlist, name), value) != 0) {
-            printf("Value changed: %s\n", value);
             strcpy(lastValue, value);
             pairlist = updateLastKnown(pairlist, name, value);
             // Write to shared memory
-            //TODO: Change shm_addr here to an attribute (slot) of a structure that we cast shm_addr to.
-            // snprintf(shm_addr, MAX_LINE_LEN, "%s=%s", name, value);
-
             // Prepare the string to write into the buffer
             char bufferData[MAX_LINE_LEN];
             snprintf(bufferData, sizeof(bufferData), "%s=%s", name, value);
-            
-            fprintf(stderr, "BEFORE CALL TO WB %s\n", bufferData);
             // Write into the buffer based on its type
             writeBuffer(buffer, bufferData);
-            // print whats inside
-            printf("OBSERVE : WRITTEN TO BUFFER: %s\n", buffer->data[0]);
         }
     }
 

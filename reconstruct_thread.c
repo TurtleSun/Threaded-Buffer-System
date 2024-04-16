@@ -21,10 +21,6 @@ typedef struct {
     int count;
 } Pair;
 
-// array to hold the last known values
-//Pair lastKnownValues[MAX_UNIQUE_NAMES];
-//int uniqueNames = 0;
-
 typedef struct {
     Pair pairs[MAX_UNIQUE_NAMES];
     // extra field to hold the count of unique names
@@ -41,14 +37,9 @@ void compileSample(KnownValues* knownValues, char* outSample);
 int nameInKnownVals(KnownValues *values, char * name);
 
 void *reconstruct_function(void *arg){
-    printf("Reconstruct thread made!\n");
     Parcel *arguemnts = (Parcel *)arg;
     Buffer *buffer1 = arguemnts->readBuffer;
     Buffer *buffer2 = arguemnts->writeBuffer;
-
-    //printf("Reconstruct BUFF: %p\n", &buffer);
-    printf("CHECKING: Reconstruct BUFF1 ISASYNC: %d\n", buffer1->isAsync);
-    printf("CHECKING: Reconstruct BUFF2 ISASYNC: %d\n", buffer2->isAsync);
 
     KnownValues knownValues = {0};
     // char array to hold the data
@@ -65,27 +56,19 @@ void *reconstruct_function(void *arg){
             break;
         }
         if (dataObs != NULL && (strcmp(dataObs, "") != 0)) {
-
-            fprintf(stderr, "RECONSTRUCT : Here is dataObs: %s\n", dataObs);
-
             parseData(dataObs, &parsedData);
 
             if (strcmp(knownValues.endName, "") == 0 && nameInKnownVals(&knownValues, parsedData.name) == 1) {
                 char sample[100];
                 compileSample(&knownValues, sample);
-                fprintf(stderr, "BEFORE RECON WB: %s\n", sample);
                 writeBuffer(buffer2, sample);
-                fprintf(stderr, "AFTER RECON WB :) \n");
             }
             updateLastKnownValues(&parsedData, &knownValues);
-            //findEndName(&knownValues);
             // if we have found the end name, compile the sample
             if (strcmp(parsedData.name, knownValues.endName) == 0) {
                 char sample[100];
                 compileSample(&knownValues, sample);
-                fprintf(stderr, "BEFORE RECON WB - OTHER: %s\n", sample);
                 writeBuffer(buffer2, sample);
-                fprintf(stderr, "AFTER RECON WB - OTHER :) \n");
             }
         }
     }

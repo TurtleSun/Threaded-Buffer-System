@@ -1,11 +1,10 @@
-#define RECONSTRUCT_THREAD_H
+#define RECONSTRUCT_THREAD .H
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
 #include <sys/mman.h>
-//#include "bufferLib_thread.h"
 #include <unistd.h>
 
 #define MAX_PAIRS 100

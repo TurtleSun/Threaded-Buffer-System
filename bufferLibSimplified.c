@@ -128,18 +128,3 @@ void writeBuffer (Buffer * buffer, char * item) {
         ringWrite(buffer, item);
     }
 }
-
-//Fake main function for testing purposes.
-/*int main(int argc, char ** argv) {
-    createBuffer(1234, "sync", 10);
-    createBuffer(5678, "sync", 10);
-    Buffer * myBuf = openBuffer(1234);
-    Buffer * myOtherBuf = openBuffer(5678);
-    ringWrite(myBuf, "cocaine");
-    ringWrite(myBuf, "World");
-    char * result = ringRead(myBuf);
-    ringWrite(myOtherBuf, result);
-    char * newResult = ringRead(myOtherBuf);
-    printf("%s", newResult);
-    return 0;
-}*/

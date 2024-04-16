@@ -18,7 +18,6 @@
 #define MAX_VALUE_LEN 100
 #define MAX_LINE_LEN 200
 #define KEY 1234
-            /// should this be buffer_size?
 #define SHMSIZE 100000
 
 struct Pair {
@@ -109,13 +108,9 @@ int main(int argc, char *argv[]) {
             strcpy(lastValue, value);
             pairlist = updateLastKnown(pairlist, name, value);
             // Write to shared memory
-            //TODO: Change shm_addr here to an attribute (slot) of a structure that we cast shm_addr to.
-            // snprintf(shm_addr, MAX_LINE_LEN, "%s=%s", name, value);
-
             // Prepare the string to write into the buffer
             char bufferData[MAX_LINE_LEN];
             snprintf(bufferData, sizeof(bufferData), "%s=%s", name, value);
-            
             // Write into the buffer based on its type
             writeBuffer(shmBuffer, bufferData);
             // print whats inside
