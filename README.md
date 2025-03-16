@@ -39,4 +39,4 @@ If you'd like to remove the object files and executables at any given time, you 
 
 ---
 
-Jake Gustin, 2024
+Jake Gustin | Paula Lopez Burgos | Michelle Luo Xin Sun , 2024
